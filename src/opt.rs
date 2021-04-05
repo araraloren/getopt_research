@@ -1,5 +1,12 @@
+
+use std::fmt::Debug;
+
 #[derive(Debug)]
 pub enum Style { X, L, S, Z, C, B, }
+
+pub trait Identifier {
+    fn opt_id(&self) -> u64;
+}
 
 pub trait Name {
     fn name(&self) -> &str;
@@ -19,4 +26,4 @@ pub trait Optional {
     fn match_optional(&self, b: bool) -> bool;
 }
 
-pub trait Opt: Name + Prefix + Optional {}
+pub trait Opt: Identifier + Name + Prefix + Optional + Debug {}
