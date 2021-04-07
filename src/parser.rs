@@ -6,3 +6,4 @@
 // -oab -c
 // -o<param> -a<param> -b<param> -c<param>
 //
+// * collect prefix and match *
