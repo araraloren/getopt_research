@@ -2,7 +2,19 @@
 use std::fmt::Debug;
 
 #[derive(Debug)]
-pub enum Style { X, L, S, Z, C, B, }
+pub enum Style { 
+    Setter(bool), // option -a
+
+    Argument(String), // option has argument -a <param>
+
+    EqualSign(String), // option has equal sign -a=<param>
+
+    Embedded(String), // option has embedded argument -a<param> 
+
+    Multiple, // multiple option -abc
+
+    NonOption, // not an option
+}
 
 pub trait Identifier {
     fn opt_id(&self) -> u64;
