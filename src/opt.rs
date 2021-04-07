@@ -5,11 +5,7 @@ use std::fmt::Debug;
 pub enum Style { 
     Setter(bool), // option -a
 
-    Argument(String), // option has argument -a <param>
-
-    EqualSign(String), // option has equal sign -a=<param>
-
-    Embedded(String), // option has embedded argument -a<param> 
+    Argument, // option has argument -a <param>
 
     Multiple, // multiple option -abc
 
