@@ -22,3 +22,25 @@ pub struct CreatorInfo {
 
     opt_name: String,
 }
+
+impl CreatorInfo {
+    pub fn new(s: &String) -> Result<Self, Error?> {
+
+    }
+
+    pub fn is_deactivate(&self) -> bool {
+        self.deactivate
+    }
+
+    pub fn is_optional(&self) -> bool {
+        self.optional
+    }
+
+    pub fn get_type(&self) -> &String {
+        &self.opt_type
+    }
+
+    pub fn get_name(&self) -> &String {
+        &self.opt_name
+    }
+}
