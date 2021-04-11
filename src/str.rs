@@ -9,8 +9,8 @@ use crate::proc::Info;
 use crate::proc::Proc;
 use crate::proc::Message;
 
-use crate::creator::CreatorInfo;
-use crate::creator::Creator;
+use crate::utils::CreatorInfo;
+use crate::utils::Utils;
 
 pub trait Str: Opt { }
 
@@ -79,7 +79,7 @@ impl Optional for StrOpt {
 #[derive(Debug)]
 pub struct StrCreator;
 
-impl Creator for StrCreator {
+impl Utils for StrCreator {
     fn name(&self) -> &str {
         "str"
     }
