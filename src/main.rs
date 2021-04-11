@@ -164,16 +164,16 @@
 mod ctx;
 mod opt;
 mod proc;
-mod creator;
+mod utils;
 mod str;
 mod err;
 mod set;
 
 fn main() {
-    println!("{:?}", creator::CreatorInfo::new("a=c").unwrap());
-    println!("{:?}", creator::CreatorInfo::new("a=c!").unwrap());
-    println!("{:?}", creator::CreatorInfo::new("a=c!/").unwrap());
-    println!("{:?}", creator::CreatorInfo::new("a=c/").unwrap());
-    println!("{:?}", creator::CreatorInfo::new("a=c/!").unwrap());
-    println!("{:?}", creator::CreatorInfo::new("count=c").unwrap());
+    println!("{:?}", utils::CreatorInfo::new("a=c").unwrap());
+    println!("{:?}", utils::CreatorInfo::new("a=c!").unwrap());
+    println!("{:?}", utils::CreatorInfo::new("a=c!/").unwrap());
+    println!("{:?}", utils::CreatorInfo::new("a=c/").unwrap());
+    println!("{:?}", utils::CreatorInfo::new("a=c/!").unwrap());
+    println!("{:?}", utils::CreatorInfo::new("count=c").unwrap());
 }
