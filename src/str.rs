@@ -5,6 +5,11 @@ use crate::opt::Name;
 use crate::opt::Prefix;
 use crate::opt::Optional;
 
+use crate::proc::Info;
+use crate::proc::Proc;
+use crate::proc::Message;
+
+use crate::creator::CreatorInfo;
 use crate::creator::Creator;
 
 pub trait Str: Opt { }
@@ -28,15 +33,6 @@ impl StrOpt {
             prefix,
             optional,
         }
-    }
-}
-
-#[derive(Debug)]
-pub struct StrCreator;
-
-impl StrCreator {
-    pub fn new() -> Self {
-        Self {}
     }
 }
 
@@ -80,12 +76,47 @@ impl Optional for StrOpt {
     }
 }
 
+#[derive(Debug)]
+pub struct StrCreator;
+
 impl Creator for StrCreator {
     fn name(&self) -> &str {
         "str"
     }
 
-    fn create(s: &str) -> Box<dyn Opt> {
-        Box::new(StrOpt::new(0, name: String, prefix: String, optional: bool))
+    fn create(&self, id: u64, ci: &CreatorInfo) -> Box<dyn Opt> {
+        Box::new(StrOpt::new(
+            id,
+            ci.get_name().clone(),
+            String::from(""),
+            ci.is_optional(),
+        ))
+    }
+}
+
+#[derive(Debug)]
+pub struct StrInfo {
+    id: u64,
+}
+
+impl StrInfo {
+    pub fn new(id: u64) -> Self {
+        Self {
+            id,
+        }
+    }
+}
+
+impl Info<Proc> for StrInfo {
+    fn info_id(&self) -> u64 {
+        self.id
+    }
+
+    fn check(&self, msg: &Proc) -> bool {
+        true
+    }
+
+    fn process(&mut self, data: &mut <Proc as Message>::Data, opt: &mut dyn Opt) {
+        
     }
 }
