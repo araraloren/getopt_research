@@ -1,11 +1,12 @@
 
 use std::fmt::Debug;
 use crate::opt::Opt;
+use crate::err::Error;
 
 pub trait Creator: Debug {
     fn name(&self) -> &str;
 
-    fn create(&self, s: &str) -> Box<dyn Opt>;
+    fn create(&self, id: u64, ci: &CreatorInfo) -> Box<dyn Opt>;
 }
 
 ///
@@ -13,6 +14,7 @@ pub trait Creator: Debug {
 /// [!]? <the option is optional or not>
 /// [/]? <the option is deactivate style or not>
 /// 
+#[derive(Debug)]
 pub struct CreatorInfo {
     deactivate: bool,
 
@@ -24,8 +26,45 @@ pub struct CreatorInfo {
 }
 
 impl CreatorInfo {
-    pub fn new(s: &String) -> Result<Self, Error?> {
+    pub fn new(s: &str) -> Result<Self, Error> {
+        const SPLIT: &str = "=";
+        const DEACTIVATE: &str = "/";
+        const NO_OPTIONAL: &str = "!";
 
+        let splited: Vec<_> = s.split(SPLIT).collect();
+        let mut type_last_index = 0;
+        let mut deactivate = false;
+        let mut optional = true;
+        
+        if splited.len() == 2 {
+            if let Some(index) = splited[1].rfind(DEACTIVATE) {
+                deactivate = true;
+                if index != 0 {
+                    type_last_index = index;
+                }
+            }
+            if let Some(index) = splited[1].rfind(NO_OPTIONAL) {
+                optional = false;
+                if index != 0 && (
+                    index < type_last_index || type_last_index == 0
+                ) {
+                    type_last_index = index;
+                }
+            }
+            let (opt_type, _) = if type_last_index == 0 {
+                (splited[1], splited[0]/* fine, not using*/)
+            } else {
+                splited[1].split_at(type_last_index)
+            };
+
+            return Ok(Self {
+                deactivate,
+                optional,
+                opt_type: String::from(opt_type),
+                opt_name: String::from(splited[0]),
+            });
+        }
+        Err(Error::InvalidOptionStr(String::from(s)))
     }
 
     pub fn is_deactivate(&self) -> bool {
