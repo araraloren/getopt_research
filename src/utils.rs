@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::opt::Opt;
 use crate::err::Error;
 
-pub trait Creator: Debug {
+pub trait Utils: Debug {
     fn name(&self) -> &str;
 
     fn create(&self, id: u64, ci: &CreatorInfo) -> Box<dyn Opt>;
