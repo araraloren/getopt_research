@@ -1,6 +1,7 @@
 use crate::opt::Opt;
 use crate::proc::Proc;
 use crate::proc::Message;
+
 use std::fmt::Debug;
 
 pub trait Context<M: Message>: Debug {
