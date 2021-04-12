@@ -4,7 +4,7 @@ use crate::opt::Style;
 
 use std::fmt::Debug;
 
-pub trait Message {
+pub trait Message: Debug {
     type Data;
 
     fn msg_id(&self) -> u64;
@@ -12,7 +12,7 @@ pub trait Message {
     fn data(&mut self) -> &mut Self::Data;
 }
 
-pub trait Info<M: Message> {
+pub trait Info<M: Message>: Debug {
     fn info_id(&self) -> u64;
 
     fn check(&self, msg: &M) -> bool;
