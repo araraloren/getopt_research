@@ -168,6 +168,7 @@ mod utils;
 mod str;
 mod err;
 mod set;
+mod parser;
 
 fn main() {
     println!("{:?}", utils::CreatorInfo::new("a=c").unwrap());
