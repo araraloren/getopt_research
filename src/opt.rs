@@ -12,6 +12,10 @@ pub enum Style {
     NonOption, // not an option
 }
 
+pub trait Type {
+    fn type_name(&self) -> &str;
+}
+
 pub trait Identifier {
     fn opt_id(&self) -> u64;
 }
@@ -34,4 +38,4 @@ pub trait Optional {
     fn match_optional(&self, b: bool) -> bool;
 }
 
-pub trait Opt: Identifier + Name + Prefix + Optional + Debug {}
+pub trait Opt: Type + Identifier + Name + Prefix + Optional + Debug {}
