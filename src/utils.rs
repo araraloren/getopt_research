@@ -1,12 +1,17 @@
 
-use std::fmt::Debug;
+use crate::proc::Info;
+use crate::proc::Proc;
 use crate::opt::Opt;
 use crate::err::Error;
 
+use std::fmt::Debug;
+
 pub trait Utils: Debug {
-    fn name(&self) -> &str;
+    fn type_name(&self) -> &str;
 
     fn create(&self, id: u64, ci: &CreatorInfo) -> Box<dyn Opt>;
+
+    fn get_info(&self, opt: &dyn Opt) -> Box<dyn Info<Proc>>;
 }
 
 ///
