@@ -1,16 +1,17 @@
 
 use crate::opt::Opt;
+use crate::opt::Type;
 use crate::opt::Identifier;
 use crate::opt::Name;
 use crate::opt::Prefix;
 use crate::opt::Optional;
-
 use crate::proc::Info;
 use crate::proc::Proc;
 use crate::proc::Message;
-
 use crate::utils::CreatorInfo;
 use crate::utils::Utils;
+
+const OPT_TYPE_STR: &'static str = "str";
 
 pub trait Str: Opt { }
 
@@ -39,6 +40,12 @@ impl StrOpt {
 impl Str for StrOpt { }
 
 impl Opt for StrOpt { }
+
+impl Type for StrOpt {
+    fn type_name(&self) ->&str {
+        OPT_TYPE_STR
+    }
+}
 
 impl Identifier for StrOpt {
     fn opt_id(&self) -> u64 {
@@ -80,8 +87,8 @@ impl Optional for StrOpt {
 pub struct StrCreator;
 
 impl Utils for StrCreator {
-    fn name(&self) -> &str {
-        "str"
+    fn type_name(&self) -> &str {
+        OPT_TYPE_STR
     }
 
     fn create(&self, id: u64, ci: &CreatorInfo) -> Box<dyn Opt> {
@@ -91,6 +98,10 @@ impl Utils for StrCreator {
             String::from(""),
             ci.is_optional(),
         ))
+    }
+
+    fn get_info(&self, opt: &dyn Opt) -> Box<dyn Info<Proc>> {
+        Box::new(StrInfo::new(opt.opt_id()))
     }
 }
 
