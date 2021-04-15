@@ -1,14 +1,7 @@
-// 
-// -o -a -b -c
-// -o <param> -a -b <param> -c
-// -o=<param> -a=<param> -b -c=<param>
-// -/o -/a -/b -/c
-// -oab -c
-// -o<param> -a<param> -b<param> -c<param>
-//
-// * collect prefix and match *
-
 use crate::set::Set;
+use crate::opt::Style;
+use crate::ctx::ArgGetter;
+use crate::ctx::OptContext;
 use crate::proc::Info;
 use crate::proc::Proc;
 use crate::proc::Publisher;
@@ -37,7 +30,13 @@ impl Parser {
     }
 
     pub fn parse(&mut self, args: &[&str]) {
-        
+        for arg in args {
+            let mut cp = Proc::new(self.msg_id_counter, Style::Argument);
+            
+            cp.append_ctx(Box::new(OptContext::new("", arg, ArgGetter(None), true, false)));
+            self.msg_id_counter += 1;
+            self.publish(cp);
+        }
     }
 }
 
