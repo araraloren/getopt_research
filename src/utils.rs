@@ -88,3 +88,82 @@ impl CreatorInfo {
         &self.opt_name
     }
 }
+
+// 
+// -o -a -b -c
+// -o <param> -a -b <param> -c
+// -o=<param> -a=<param> -b -c=<param>
+// -/o -/a -/b -/c
+// -oab -c
+// -o<param> -a<param> -b<param> -c<param>
+//
+// * collect prefix and match *
+#[derive(Debug)]
+pub struct CommandInfo {
+    prefixs: Vec<String>,
+
+    name: Option<String>,
+
+    prefix: Option<String>,
+
+    value: Option<String>,
+}
+
+impl CommandInfo {
+    pub fn new(prefixs: Vec<String>) -> Self {
+        let mut prefixs = prefixs;
+
+        prefixs.sort_by(|a: &String, b: &String | b.len().cmp(&a.len()) );
+        Self {
+            prefixs: prefixs,
+            name: None,
+            prefix: None,
+            value: None,
+        }
+    }
+
+    pub fn parse(&mut self, s: &str) -> bool {
+        const SPLIT: &'static str = "=";
+
+        for prefix in &self.prefixs {
+            if s.starts_with(prefix) {
+                self.prefix = Some(String::from(prefix));
+                let (_, left_str) = s.split_at(prefix.len());
+                let name_or_value: Vec<_> = left_str.split(SPLIT).collect();
+                
+                match name_or_value.len() {
+                    1 => {
+                        self.name = Some(String::from(left_str));
+                    }
+                    2 => {
+                        self.name = Some(String::from(name_or_value[0]));
+                        self.value = Some(String::from(name_or_value[1]));
+                    }
+                    _ => {
+                        continue;
+                    }
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn get_name(&self) -> Option<&String> {
+        self.name.as_ref()
+    }
+
+    pub fn get_prefix(&self) -> Option<&String> {
+        self.prefix.as_ref()
+    }
+
+    pub fn get_value(&self) -> Option<&String> {
+        self.value.as_ref()
+    }
+
+    pub fn reset(&mut self) {
+        self.name = None;
+        self.prefix = None; 
+        self.value = None;
+    }
+}
