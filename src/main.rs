@@ -177,4 +177,40 @@ fn main() {
     println!("{:?}", utils::CreatorInfo::new("a=c/").unwrap());
     println!("{:?}", utils::CreatorInfo::new("a=c/!").unwrap());
     println!("{:?}", utils::CreatorInfo::new("count=c").unwrap());
+
+    let mut ci = utils::CommandInfo::new(vec![
+        String::from(""),
+        String::from("-"),
+        String::from("-/"),
+        String::from("--"),
+        String::from("--/"),
+        ]);
+
+    if ci.parse("-a") {
+        println!("{:?}", ci);
+    }
+    if ci.parse("-a=b") {
+        println!("{:?}", ci);
+    }
+    if ci.parse("-abcd") {
+        println!("{:?}", ci);
+    }
+    if ci.parse("-/a") {
+        println!("{:?}", ci);
+    }
+    if ci.parse("--abcd") {
+        println!("{:?}", ci);
+    }
+    if ci.parse("--/abcd") {
+        println!("{:?}", ci);
+    }
+    if ci.parse("--abcd=1") {
+        println!("{:?}", ci);
+    }
+    if ci.parse("a") {
+        println!("{:?}", ci);
+    }
+    if ci.parse("abcd") {
+        println!("{:?}", ci);
+    }
 }
