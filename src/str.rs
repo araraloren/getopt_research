@@ -1,13 +1,13 @@
 
 use crate::opt::Opt;
 use crate::opt::Type;
+use crate::opt::Style;
 use crate::opt::Identifier;
 use crate::opt::Name;
 use crate::opt::Prefix;
 use crate::opt::Optional;
+use crate::opt::CommonInfo;
 use crate::proc::Info;
-use crate::proc::Proc;
-use crate::proc::Message;
 use crate::utils::CreatorInfo;
 use crate::utils::Utils;
 
@@ -15,7 +15,7 @@ const OPT_TYPE_STR: &'static str = "str";
 
 pub trait Str: Opt { }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StrOpt {
     opt_id: u64,
 
@@ -45,10 +45,22 @@ impl Type for StrOpt {
     fn type_name(&self) ->&str {
         OPT_TYPE_STR
     }
+
+    fn match_style(&self, style: Style) -> bool {
+        match style {
+            Style::Argument => {
+                true
+            }
+            Style::Multiple => {
+                self.name().len() == 1
+            }
+            _ => { false }
+        }
+    }
 }
 
 impl Identifier for StrOpt {
-    fn opt_id(&self) -> u64 {
+    fn id(&self) -> u64 {
         self.opt_id
     }
 }
@@ -84,9 +96,15 @@ impl Optional for StrOpt {
 }
 
 #[derive(Debug)]
-pub struct StrCreator;
+pub struct StrUtils;
 
-impl Utils for StrCreator {
+impl StrUtils {
+    pub fn new() -> Self {
+        Self { }
+    }
+}
+
+impl Utils for StrUtils {
     fn type_name(&self) -> &str {
         OPT_TYPE_STR
     }
@@ -100,34 +118,7 @@ impl Utils for StrCreator {
         ))
     }
 
-    fn get_info(&self, opt: &dyn Opt) -> Box<dyn Info<Proc>> {
-        Box::new(StrInfo::new(opt.opt_id()))
-    }
-}
-
-#[derive(Debug)]
-pub struct StrInfo {
-    id: u64,
-}
-
-impl StrInfo {
-    pub fn new(id: u64) -> Self {
-        Self {
-            id,
-        }
-    }
-}
-
-impl Info<Proc> for StrInfo {
-    fn info_id(&self) -> u64 {
-        self.id
-    }
-
-    fn check(&self, msg: &Proc) -> bool {
-        true
-    }
-
-    fn process(&mut self, data: &mut <Proc as Message>::Data, opt: &mut dyn Opt) {
-        
+    fn get_info(&self, opt: &dyn Opt) -> Box<dyn Info> {
+        Box::new(CommonInfo::new(opt.id()))
     }
 }
