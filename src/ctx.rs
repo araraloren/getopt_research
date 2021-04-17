@@ -1,4 +1,5 @@
 use crate::opt::Opt;
+use crate::opt::Style;
 use crate::proc::Proc;
 use crate::proc::Message;
 
@@ -31,10 +32,10 @@ pub struct OptContext {
     name: String,
 
     // a function that can get argument of option
-    args: ArgGetter,
+    next_arg: Option<String>,
 
-    // do we need an argument
-    argument: bool,
+    // option style
+    style: Style,
 
     // can we skip next argument when matched
     can_skip: bool,
@@ -43,19 +44,19 @@ pub struct OptContext {
     matched: bool,
 }
 
-impl<'a, 'b> OptContext {
+impl<'a, 'b, 'c> OptContext {
     pub fn new(
-        prefix: &'a str,
-        name: &'b str,
-        args: ArgGetter,
-        argument: bool,
+        prefix: String,
+        name: String,
+        next_arg: Option<String>,
+        style: Style,
         can_skip: bool,
     ) -> Self {
         Self {
-            prefix: String::from(prefix),
-            name: String::from(name),
-            argument,
-            args,
+            prefix,
+            name,
+            next_arg,
+            style,
             can_skip,
             matched: false,
         }
@@ -64,7 +65,13 @@ impl<'a, 'b> OptContext {
 
 impl Context<Proc> for OptContext {
     fn match_msg(&self, msg: &Proc, opt: &dyn Opt) -> bool {
-        true
+        debug!("matching {:?} <-> {:?}", self, opt);
+        let mut ret = opt.match_style(self.style.clone());
+
+        if ret {
+            ret = ret && opt.match_name(self.name.as_str());
+        }
+        ret
     }
 
     fn process(&self, msg: &Proc, opt: &mut dyn Opt) {
