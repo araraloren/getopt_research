@@ -1,6 +1,5 @@
 
 use crate::proc::Info;
-use crate::proc::Proc;
 use crate::opt::Opt;
 use crate::err::Error;
 
@@ -11,7 +10,7 @@ pub trait Utils: Debug {
 
     fn create(&self, id: u64, ci: &CreatorInfo) -> Box<dyn Opt>;
 
-    fn get_info(&self, opt: &dyn Opt) -> Box<dyn Info<Proc>>;
+    fn get_info(&self, opt: &dyn Opt) -> Box<dyn Info>;
 }
 
 ///
