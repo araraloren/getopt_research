@@ -168,49 +168,36 @@ mod utils;
 mod str;
 mod err;
 mod set;
+mod id;
 mod parser;
 
-fn main() {
-    println!("{:?}", utils::CreatorInfo::new("a=c").unwrap());
-    println!("{:?}", utils::CreatorInfo::new("a=c!").unwrap());
-    println!("{:?}", utils::CreatorInfo::new("a=c!/").unwrap());
-    println!("{:?}", utils::CreatorInfo::new("a=c/").unwrap());
-    println!("{:?}", utils::CreatorInfo::new("a=c/!").unwrap());
-    println!("{:?}", utils::CreatorInfo::new("count=c").unwrap());
+use set::Set;
+use id::DefaultIdGen;
+use crate::str::StrUtils;
 
-    let mut ci = utils::CommandInfo::new(vec![
-        String::from(""),
-        String::from("-"),
-        String::from("-/"),
-        String::from("--"),
-        String::from("--/"),
-        ]);
+#[macro_use] extern crate log;
 
-    if ci.parse("-a") {
-        println!("{:?}", ci);
-    }
-    if ci.parse("-a=b") {
-        println!("{:?}", ci);
-    }
-    if ci.parse("-abcd") {
-        println!("{:?}", ci);
-    }
-    if ci.parse("-/a") {
-        println!("{:?}", ci);
-    }
-    if ci.parse("--abcd") {
-        println!("{:?}", ci);
-    }
-    if ci.parse("--/abcd") {
-        println!("{:?}", ci);
-    }
-    if ci.parse("--abcd=1") {
-        println!("{:?}", ci);
-    }
-    if ci.parse("a") {
-        println!("{:?}", ci);
-    }
-    if ci.parse("abcd") {
-        println!("{:?}", ci);
-    }
+use simplelog::*;
+
+fn main() -> Result<(), err::Error> {
+    CombinedLogger::init(vec![
+        SimpleLogger::new(LevelFilter::Warn, Config::default()),
+        SimpleLogger::new(LevelFilter::Debug, Config::default()),
+        SimpleLogger::new(LevelFilter::Error, Config::default()),
+        SimpleLogger::new(LevelFilter::Info, Config::default()),
+    ]).unwrap();
+
+    let mut set = Set::new(Box::new(DefaultIdGen::new()));
+
+    set.add_utils("str", Box::new(StrUtils::new()));
+    set.add_opt("str", "q=str")?;
+
+    let mut parser = parser::Parser::new();
+
+    set.subscribe_from(&mut parser);
+    parser.publish_to(set);
+
+    parser.parse(&["q", "value"]);
+
+    Ok(())
 }
