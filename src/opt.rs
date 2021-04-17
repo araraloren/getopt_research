@@ -1,7 +1,11 @@
 
 use std::fmt::Debug;
+use std::clone::Clone;
 
-#[derive(Debug)]
+use crate::proc::Info;
+use crate::proc::Proc;
+
+#[derive(Debug, Clone)]
 pub enum Style { 
     Setter(bool), // option -a
 
@@ -14,10 +18,12 @@ pub enum Style {
 
 pub trait Type {
     fn type_name(&self) -> &str;
+
+    fn match_style(&self, style: Style) -> bool;
 }
 
 pub trait Identifier {
-    fn opt_id(&self) -> u64;
+    fn id(&self) -> u64;
 }
 
 pub trait Name {
@@ -39,3 +45,22 @@ pub trait Optional {
 }
 
 pub trait Opt: Type + Identifier + Name + Prefix + Optional + Debug {}
+
+#[derive(Debug)]
+pub struct CommonInfo {
+    id: u64,
+}
+
+impl CommonInfo {
+    pub fn new(id: u64) -> Self {
+        Self {
+            id,
+        }
+    }
+}
+
+impl Info for CommonInfo {
+    fn id(&self) -> u64 {
+        self.id
+    }
+}
