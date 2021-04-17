@@ -5,21 +5,26 @@ use crate::proc::Proc;
 use crate::err::Error;
 use crate::utils::Utils;
 use crate::utils::CreatorInfo;
+use crate::id::IdGenerator;
 
 use std::collections::HashMap;
+
 
 #[derive(Debug)]
 pub struct Set {
     opts: Vec<Box<dyn Opt>>,
 
     utils: HashMap<String, Box<dyn Utils>>,
+
+    idgen: Box<dyn IdGenerator>,
 }
 
 impl Set {
-    pub fn new() -> Self {
+    pub fn new(idgen: Box<dyn IdGenerator>) -> Self {
         Self {
             opts: vec![],
             utils: HashMap::new(),
+            idgen,
         }
     }
 
@@ -32,13 +37,15 @@ impl Set {
         self.utils.get(s)
     }
 
-    pub fn add_opt(&mut self, id: u64, n: &str, opt: &'static str) -> Result<bool, Error> {
+    pub fn add_opt(&mut self, n: &str, opt: &'static str) -> Result<u64, Error> {
+        let id  = self.idgen.next_id();
+        
         match self.get_utils(n) {
             Some(util) => {
                 let ci  = CreatorInfo::new(opt)?;
                 let opt = util.create(id, &ci);
                 self.opts.push(opt);
-                Ok(true)
+                Ok(id)
             }
             None => {
                 Err(Error::InvalidOptionType(String::from(n)))
@@ -48,7 +55,7 @@ impl Set {
 
     pub fn get_opt(&self, id: u64) -> Option<&dyn Opt> {
         for opt in &self.opts {
-            if opt.opt_id() == id {
+            if opt.id() == id {
                 return Some(opt.as_ref())
             }
         }
@@ -57,11 +64,25 @@ impl Set {
 
     pub fn get_opt_mut(&mut self, id: u64) -> Option<&mut dyn Opt> {
         for opt in &mut self.opts {
-            if opt.opt_id() == id {
+            if opt.id() == id {
                 return Some(opt.as_mut())
             }
         }
         None
+    }
+
+    pub fn collect_prefix(&self) -> Vec<String> {
+        let mut ret: Vec<String> = vec![];
+
+        for opt in &self.opts {
+            let prefix = String::from(opt.prefix());
+
+            if ! ret.contains(&prefix) {
+                ret.push(prefix);
+            }
+        }
+
+        ret
     }
 
     pub fn subscribe_from(&self, publisher: &mut dyn Publisher<Proc>) {
