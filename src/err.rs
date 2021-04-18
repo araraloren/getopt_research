@@ -8,4 +8,7 @@ pub enum Error {
 
     #[error("invalid option type: `{0}`")]
     InvalidOptionType(String),
+
+    #[error("invalid option value: `{0}`")]
+    InvaldOptionValue(String),
 }
