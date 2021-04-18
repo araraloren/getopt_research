@@ -30,7 +30,7 @@ pub struct Proc {
     proc_id: u64,
 
     // context need process
-    ctxs: Vec<Box<dyn Context<Proc>>>,
+    ctxs: Vec<Box<dyn Context>>,
 }
 
 impl Proc {
@@ -41,24 +41,17 @@ impl Proc {
         }
     }
 
-    pub fn append_ctx(&mut self, ctx: Box<dyn Context<Proc>>) {
+    pub fn append_ctx(&mut self, ctx: Box<dyn Context>) {
         self.ctxs.push(ctx);
     }
 
-    pub fn check(&self, opt: &dyn Opt) -> bool {
-        for ctx in &self.ctxs {
-            if ctx.match_msg(self, opt) {
-
-            }
-            else {
-                return false;
+    pub fn run(&mut self, opt: &mut dyn Opt) {
+        for ctx in &mut self.ctxs {
+            if ctx.match_opt(opt) {
+                ctx.set_matched();
+                ctx.process(opt);
             }
         }
-        true
-    }
-
-    pub fn run(&mut self, opt: &mut dyn Opt) {
-        debug!("");
     }
 }
 
