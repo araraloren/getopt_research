@@ -27,10 +27,14 @@ pub struct CreatorInfo {
     opt_type: String,
 
     opt_name: String,
+
+    opt_prefix: String,
+
+    opt_alias: Vec<String>,
 }
 
 impl CreatorInfo {
-    pub fn new(s: &str) -> Result<Self, Error> {
+    pub fn new(s: &str, prefix: &str) -> Result<Self, Error> {
         const SPLIT: &str = "=";
         const DEACTIVATE: &str = "/";
         const NO_OPTIONAL: &str = "!";
@@ -66,9 +70,17 @@ impl CreatorInfo {
                 optional,
                 opt_type: String::from(opt_type),
                 opt_name: String::from(splited[0]),
+                opt_prefix: String::from(prefix),
+                opt_alias: vec![],
             });
         }
         Err(Error::InvalidOptionStr(String::from(s)))
+    }
+
+    pub fn new_with_alias(s: &str, prefix: &str, alias: Vec<String>) -> Result<Self, Error> {
+        let mut ci = Self::new(s, prefix)?;
+        ci.opt_alias = alias;
+        Ok(ci)
     }
 
     pub fn is_deactivate(&self) -> bool {
@@ -85,6 +97,49 @@ impl CreatorInfo {
 
     pub fn get_name(&self) -> &String {
         &self.opt_name
+    }
+
+    pub fn get_prefix(&self) -> &String {
+        &self.opt_prefix
+    }
+
+    pub fn get_alias(&self) -> &Vec<String> {
+        &self.opt_alias
+    }
+
+    pub fn set_deactivate(&mut self, deactivate: bool) -> &mut Self {
+        self.deactivate = deactivate;
+        self
+    }
+
+    pub fn set_optional(&mut self, optional: bool) -> &mut Self {
+        self.optional = optional;
+        self
+    }
+
+    pub fn set_type(&mut self, opt_type: String) -> &mut Self {
+        self.opt_type = opt_type;
+        self
+    }
+
+    pub fn set_name(&mut self, opt_name: String) -> &mut Self {
+        self.opt_name = opt_name;
+        self
+    }
+
+    pub fn set_prefix(&mut self, prefix: String) -> &mut Self {
+        self.opt_prefix = prefix;
+        self
+    }
+
+    pub fn add_alias(&mut self, alias: String) -> &mut Self {
+        self.opt_alias.push(alias);
+        self
+    }
+
+    pub fn clr_alias(&mut self) -> &mut Self {
+        self.opt_alias.clear();
+        self
     }
 }
 
