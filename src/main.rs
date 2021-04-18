@@ -171,6 +171,7 @@ mod set;
 mod id;
 mod parser;
 
+use crate::str::StrOpt;
 use set::Set;
 use id::DefaultIdGen;
 use crate::str::StrUtils;
@@ -190,14 +191,16 @@ fn main() -> Result<(), err::Error> {
     let mut set = Set::new(Box::new(DefaultIdGen::new()));
 
     set.add_utils("str", Box::new(StrUtils::new()));
-    set.add_opt("str", "q=str")?;
+    set.add_opt("str", "q=str", "-")?;
 
     let mut parser = parser::Parser::new();
 
     set.subscribe_from(&mut parser);
     parser.publish_to(set);
 
-    parser.parse(&["q", "value"]);
+    parser.parse(&["-q", "value"]);
+
+    dbg!(parser.set().unwrap().get_opt(1).unwrap().as_any().downcast_ref::<StrOpt>());
 
     Ok(())
 }
