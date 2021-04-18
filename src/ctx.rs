@@ -5,12 +5,12 @@ use crate::proc::Message;
 
 use std::fmt::Debug;
 
-pub trait Context<M: Message>: Debug {
-    fn match_msg(&self, msg: &M, opt: &dyn Opt) -> bool;
+pub trait Context: Debug {
+    fn match_opt(&self, opt: &dyn Opt) -> bool;
 
-    fn process(&self, msg: &M, opt: &mut dyn Opt);
+    fn process(&self, opt: &mut dyn Opt);
 
-    fn set_match(&mut self);
+    fn set_matched(&mut self);
 
     fn matched(&self) -> bool;
 }
@@ -63,22 +63,41 @@ impl<'a, 'b, 'c> OptContext {
     }
 }
 
-impl Context<Proc> for OptContext {
-    fn match_msg(&self, msg: &Proc, opt: &dyn Opt) -> bool {
-        debug!("matching {:?} <-> {:?}", self, opt);
+impl Context for OptContext {
+    fn match_opt(&self, opt: &dyn Opt) -> bool {
+        debug!("MATCHING {:?} <-> {:?}", self, opt);
         let mut ret = opt.match_style(self.style.clone());
 
         if ret {
             ret = ret && opt.match_name(self.name.as_str());
         }
+        if ret {
+            ret = ret && opt.match_prefix(self.prefix.as_str());
+        }
+
+        debug!("==> {}", ret);
         ret
     }
 
-    fn process(&self, msg: &Proc, opt: &mut dyn Opt) {
-
+    fn process(&self, opt: &mut dyn Opt) {
+        match &self.next_arg {
+            Some(next_arg) => {
+                match opt.parse_value(next_arg) {
+                    Some(value) => {
+                        opt.set_value(value);
+                    }
+                    None => {
+                        // !!!
+                    }
+                }
+            }
+            None => {
+                // !!!
+            }
+        }
     }
 
-    fn set_match(&mut self) {
+    fn set_matched(&mut self) {
         self.matched = true;
     }
 
