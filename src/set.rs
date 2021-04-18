@@ -37,12 +37,12 @@ impl Set {
         self.utils.get(s)
     }
 
-    pub fn add_opt(&mut self, n: &str, opt: &'static str) -> Result<u64, Error> {
+    pub fn add_opt(&mut self, n: &str, opt: &str, prefix: &str) -> Result<u64, Error> {
         let id  = self.idgen.next_id();
         
         match self.get_utils(n) {
             Some(util) => {
-                let ci  = CreatorInfo::new(opt)?;
+                let ci  = CreatorInfo::new(opt, prefix)?;
                 let opt = util.create(id, &ci);
                 self.opts.push(opt);
                 Ok(id)
@@ -51,6 +51,56 @@ impl Set {
                 Err(Error::InvalidOptionType(String::from(n)))
             }
         }
+    }
+
+    pub fn add_opt_alias(&mut self, n: &str, opt: &str, prefix: &str, alias: Vec<String>) -> Result<u64, Error> {
+        let id  = self.idgen.next_id();
+        
+        match self.get_utils(n) {
+            Some(util) => {
+                let ci  = CreatorInfo::new_with_alias(opt, prefix, alias)?;
+                let opt = util.create(id, &ci);
+                self.opts.push(opt);
+                Ok(id)
+            }
+            None => {
+                Err(Error::InvalidOptionType(String::from(n)))
+            }
+        }
+    }
+
+    pub fn add_str_opt(&mut self, opt: &str, prefix: &str) -> Result<u64, Error> {
+        let id  = self.idgen.next_id();
+        
+        match self.get_utils(crate::str::current_type()) {
+            Some(util) => {
+                let ci  = CreatorInfo::new(opt, prefix)?;
+                let opt = util.create(id, &ci);
+                self.opts.push(opt);
+                Ok(id)
+            }
+            None => { // next go here
+                Err(Error::InvalidOptionType(String::from("")))
+            }
+        }
+    }
+
+    pub fn get_opt_boxed(&self, id: u64) -> Option<&Box<dyn Opt>> {
+        for opt in &self.opts {
+            if opt.id() == id {
+                return Some(opt)
+            }
+        }
+        None
+    }
+
+    pub fn get_opt_boxed_mut(&mut self, id: u64) -> Option<&mut Box<dyn Opt>> {
+        for opt in &mut self.opts {
+            if opt.id() == id {
+                return Some(opt)
+            }
+        }
+        None
     }
 
     pub fn get_opt(&self, id: u64) -> Option<&dyn Opt> {
