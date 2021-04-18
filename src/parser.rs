@@ -59,9 +59,10 @@ impl Parser {
             let mut cp = Proc::new(self.msg_id_gen.next_id());
             
             if ci.parse(arg) {
+                dbg!(&ci);
                 cp.append_ctx(Box::new(OptContext::new(
                     ci.get_prefix().unwrap().clone(), 
-                    String::from(arg),
+                    ci.get_name().unwrap().clone(),
                     if arg_index >= args.len() - 1 { None } else { Some(String::from(args[arg_index + 1])) },
                     Style::Argument,
                     false
@@ -77,18 +78,13 @@ impl Parser {
 
 impl Publisher<Proc> for Parser {
     fn publish(&mut self, msg: Proc) {
-        let mut msg = msg;
+        let mut proc = msg;
 
-        debug!("get msg: {:?}", msg);
+        debug!("get msg: {:?}", proc);
         for index in 0 .. self.info.len() {
             let info = self.info.get_mut(index).unwrap();
-            let inner_set = self.set.as_ref().unwrap();
-            let opt = inner_set.get_opt(info.id());
-            let checked = msg.check(opt.unwrap());
             
-            if checked {
-                msg.run(self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap());
-            }
+            proc.run(self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap());
         }
     }
 
