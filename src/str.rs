@@ -1,21 +1,27 @@
 
+use std::any::Any;
+
 use crate::opt::Opt;
 use crate::opt::Type;
 use crate::opt::Style;
 use crate::opt::Identifier;
 use crate::opt::Name;
+use crate::opt::Value;
 use crate::opt::Prefix;
+use crate::opt::OptValue;
 use crate::opt::Optional;
 use crate::opt::CommonInfo;
 use crate::proc::Info;
 use crate::utils::CreatorInfo;
 use crate::utils::Utils;
 
-const OPT_TYPE_STR: &'static str = "str";
+pub fn current_type() -> &'static str {
+    "str"
+}
 
 pub trait Str: Opt { }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StrOpt {
     opt_id: u64,
 
@@ -24,6 +30,8 @@ pub struct StrOpt {
     prefix: String,
 
     optional: bool,
+
+    value: OptValue,
 }
 
 impl StrOpt {
@@ -33,6 +41,7 @@ impl StrOpt {
             name,
             prefix,
             optional,
+            value: OptValue::Null,
         }
     }
 }
@@ -43,7 +52,7 @@ impl Opt for StrOpt { }
 
 impl Type for StrOpt {
     fn type_name(&self) ->&str {
-        OPT_TYPE_STR
+        current_type()
     }
 
     fn match_style(&self, style: Style) -> bool {
@@ -51,11 +60,12 @@ impl Type for StrOpt {
             Style::Argument => {
                 true
             }
-            Style::Multiple => {
-                self.name().len() == 1
-            }
             _ => { false }
         }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -70,6 +80,10 @@ impl Name for StrOpt {
         &self.name
     }
 
+    fn set_name(&mut self, s: &str) {
+        self.name = String::from(s)
+    }
+
     fn match_name(&self, s: &str) -> bool {
         self.name() == s
     }
@@ -78,6 +92,10 @@ impl Name for StrOpt {
 impl Prefix for StrOpt {
     fn prefix(&self) -> &str {
         &self.prefix
+    }
+
+    fn set_prefix(&mut self, s: &str) {
+        self.prefix = String::from(s)
     }
 
     fn match_prefix(&self, s: &str) -> bool {
@@ -90,8 +108,26 @@ impl Optional for StrOpt {
         self.optional
     }
 
+    fn set_optional(&mut self, b: bool) {
+        self.optional = b;
+    }
+
     fn match_optional(&self, b: bool) -> bool {
         self.optional() == b
+    }
+}
+
+impl Value for StrOpt {
+    fn value(&self) -> &OptValue {
+        &self.value
+    }
+
+    fn set_value(&mut self, v: OptValue) {
+        self.value = v;
+    }
+
+    fn parse_value(&self, v: &String) -> Option<OptValue> {
+        Some(OptValue::Str(v.clone()))
     }
 }
 
@@ -106,14 +142,14 @@ impl StrUtils {
 
 impl Utils for StrUtils {
     fn type_name(&self) -> &str {
-        OPT_TYPE_STR
+        current_type()
     }
 
     fn create(&self, id: u64, ci: &CreatorInfo) -> Box<dyn Opt> {
         Box::new(StrOpt::new(
             id,
             ci.get_name().clone(),
-            String::from(""),
+            ci.get_prefix().clone(),
             ci.is_optional(),
         ))
     }
