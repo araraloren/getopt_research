@@ -122,10 +122,10 @@ impl Parser {
     }
 
     fn gen_multiple_style(&self, ci: &CommandInfo) -> Vec<Box<dyn Context>> {
-        match ci.get_value() {
-            None if ci.get_name().unwrap().len() > 1 => {
-                let mut ret: Vec<Box<dyn Context>> = vec![];
+        let mut ret: Vec<Box<dyn Context>> = vec![];
 
+        if ci.get_value().is_none() {
+            if ci.get_name().unwrap().len() > 1 {
                 for char in ci.get_name().unwrap().chars() {
                     ret.push(Box::new(OptContext::new(
                         ci.get_prefix().unwrap().clone(),
@@ -135,12 +135,9 @@ impl Parser {
                         false,
                     )))
                 }
-                ret
-            }
-            _ => {
-                vec![]
             }
         }
+        ret
     }
 
     fn gen_boolean_style(&self, ci: &CommandInfo) -> Option<Box<dyn Context>> {
