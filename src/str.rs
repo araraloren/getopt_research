@@ -1,16 +1,15 @@
-
 use std::any::Any;
 
-use crate::opt::Opt;
-use crate::opt::Type;
-use crate::opt::Style;
+use crate::opt::CommonInfo;
 use crate::opt::Identifier;
 use crate::opt::Name;
-use crate::opt::Value;
-use crate::opt::Prefix;
+use crate::opt::Opt;
 use crate::opt::OptValue;
 use crate::opt::Optional;
-use crate::opt::CommonInfo;
+use crate::opt::Prefix;
+use crate::opt::Style;
+use crate::opt::Type;
+use crate::opt::Value;
 use crate::proc::Info;
 use crate::utils::CreatorInfo;
 use crate::utils::Utils;
@@ -19,7 +18,7 @@ pub fn current_type() -> &'static str {
     "str"
 }
 
-pub trait Str: Opt { }
+pub trait Str: Opt {}
 
 #[derive(Debug)]
 pub struct StrOpt {
@@ -46,22 +45,28 @@ impl StrOpt {
     }
 }
 
-impl Str for StrOpt { }
+impl Str for StrOpt {}
 
-impl Opt for StrOpt { }
+impl Opt for StrOpt {}
 
 impl Type for StrOpt {
-    fn type_name(&self) ->&str {
+    fn type_name(&self) -> &str {
         current_type()
     }
 
     fn match_style(&self, style: Style) -> bool {
         match style {
-            Style::Argument => {
-                true
-            }
-            _ => { false }
+            Style::Argument => true,
+            _ => false,
         }
+    }
+
+    fn is_deactivate(&self) -> bool {
+        false
+    }
+
+    fn is_need_argument(&self) -> bool {
+        true
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -126,8 +131,11 @@ impl Value for StrOpt {
         self.value = v;
     }
 
-    fn parse_value(&self, v: &String) -> Option<OptValue> {
-        Some(OptValue::Str(v.clone()))
+    fn parse_value(&self, v: Option<&String>) -> Option<OptValue> {
+        if let Some(v) = v {
+            return Some(OptValue::Str(v.clone()));
+        }
+        None
     }
 }
 
@@ -136,7 +144,7 @@ pub struct StrUtils;
 
 impl StrUtils {
     pub fn new() -> Self {
-        Self { }
+        Self {}
     }
 }
 
