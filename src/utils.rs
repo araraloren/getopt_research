@@ -1,7 +1,6 @@
-
-use crate::proc::Info;
-use crate::opt::Opt;
 use crate::err::Error;
+use crate::opt::Opt;
+use crate::proc::Info;
 
 use std::fmt::Debug;
 
@@ -14,10 +13,10 @@ pub trait Utils: Debug {
 }
 
 ///
-/// <name> = <type> 
+/// <name> = <type>
 /// [!]? <the option is optional or not>
 /// [/]? <the option is deactivate style or not>
-/// 
+///
 #[derive(Debug)]
 pub struct CreatorInfo {
     deactivate: bool,
@@ -43,7 +42,7 @@ impl CreatorInfo {
         let mut type_last_index = 0;
         let mut deactivate = false;
         let mut optional = true;
-        
+
         if splited.len() == 2 {
             if let Some(index) = splited[1].rfind(DEACTIVATE) {
                 deactivate = true;
@@ -53,14 +52,12 @@ impl CreatorInfo {
             }
             if let Some(index) = splited[1].rfind(NO_OPTIONAL) {
                 optional = false;
-                if index != 0 && (
-                    index < type_last_index || type_last_index == 0
-                ) {
+                if index != 0 && (index < type_last_index || type_last_index == 0) {
                     type_last_index = index;
                 }
             }
             let (opt_type, _) = if type_last_index == 0 {
-                (splited[1], splited[0]/* fine, not using*/)
+                (splited[1], splited[0] /* fine, not using*/)
             } else {
                 splited[1].split_at(type_last_index)
             };
@@ -143,7 +140,7 @@ impl CreatorInfo {
     }
 }
 
-// 
+//
 // -o -a -b -c
 // -o <param> -a -b <param> -c
 // -o=<param> -a=<param> -b -c=<param>
@@ -167,7 +164,7 @@ impl CommandInfo {
     pub fn new(prefixs: Vec<String>) -> Self {
         let mut prefixs = prefixs;
 
-        prefixs.sort_by(|a: &String, b: &String | b.len().cmp(&a.len()) );
+        prefixs.sort_by(|a: &String, b: &String| b.len().cmp(&a.len()));
         Self {
             prefixs: prefixs,
             name: None,
@@ -184,7 +181,7 @@ impl CommandInfo {
                 self.prefix = Some(String::from(prefix));
                 let (_, left_str) = s.split_at(prefix.len());
                 let name_or_value: Vec<_> = left_str.split(SPLIT).collect();
-                
+
                 match name_or_value.len() {
                     1 => {
                         self.name = Some(String::from(left_str));
@@ -217,7 +214,7 @@ impl CommandInfo {
 
     pub fn reset(&mut self) {
         self.name = None;
-        self.prefix = None; 
+        self.prefix = None;
         self.value = None;
     }
 }
