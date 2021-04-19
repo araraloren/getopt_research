@@ -1,7 +1,7 @@
 use crate::opt::Opt;
 use crate::opt::Style;
-use crate::proc::Proc;
 use crate::proc::Message;
+use crate::proc::Proc;
 
 use std::fmt::Debug;
 
@@ -12,15 +12,7 @@ pub trait Context: Debug {
 
     fn set_matched(&mut self);
 
-    fn matched(&self) -> bool;
-}
-
-pub struct ArgGetter(pub Option<Box<dyn Fn() -> String>>);
-
-impl Debug for ArgGetter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ArgGetter").field("Fn", &"()").finish()
-    }
+    fn is_matched(&self) -> bool;
 }
 
 #[derive(Debug)]
@@ -66,6 +58,7 @@ impl<'a, 'b, 'c> OptContext {
 impl Context for OptContext {
     fn match_opt(&self, opt: &dyn Opt) -> bool {
         debug!("MATCHING {:?} <-> {:?}", self, opt);
+
         let mut ret = opt.match_style(self.style.clone());
 
         if ret {
@@ -80,20 +73,8 @@ impl Context for OptContext {
     }
 
     fn process(&self, opt: &mut dyn Opt) {
-        match &self.next_arg {
-            Some(next_arg) => {
-                match opt.parse_value(next_arg) {
-                    Some(value) => {
-                        opt.set_value(value);
-                    }
-                    None => {
-                        // !!!
-                    }
-                }
-            }
-            None => {
-                // !!!
-            }
+        if let Some(v) = opt.parse_value(self.next_arg.as_ref()) {
+            opt.set_value(v);
         }
     }
 
@@ -101,7 +82,7 @@ impl Context for OptContext {
         self.matched = true;
     }
 
-    fn matched(&self) -> bool {
+    fn is_matched(&self) -> bool {
         self.matched
     }
 }
