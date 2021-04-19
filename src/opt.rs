@@ -1,15 +1,14 @@
-
 use std::any::Any;
-use std::fmt::Debug;
 use std::clone::Clone;
 use std::convert::Into;
+use std::fmt::Debug;
 
 use crate::err::Error;
 use crate::proc::Info;
 
 #[derive(Debug, Clone)]
-pub enum Style { 
-    Setter(bool), // option -a
+pub enum Style {
+    Boolean, // option -a
 
     Argument, // option has argument -a <param>
 
@@ -41,6 +40,10 @@ pub trait Type {
     fn type_name(&self) -> &str;
 
     fn match_style(&self, style: Style) -> bool;
+
+    fn is_deactivate(&self) -> bool;
+
+    fn is_need_argument(&self) -> bool;
 
     fn as_any(&self) -> &dyn Any;
 }
@@ -78,7 +81,7 @@ pub trait Value {
 
     fn set_value(&mut self, v: OptValue);
 
-    fn parse_value(&self, v: &String) -> Option<OptValue>;
+    fn parse_value(&self, v: Option<&String>) -> Option<OptValue>;
 }
 
 pub trait Opt: Type + Identifier + Name + Prefix + Optional + Value + Debug {}
@@ -90,9 +93,7 @@ pub struct CommonInfo {
 
 impl CommonInfo {
     pub fn new(id: u64) -> Self {
-        Self {
-            id,
-        }
+        Self { id }
     }
 }
 
@@ -103,25 +104,17 @@ impl Info for CommonInfo {
 }
 
 impl OptValue {
-    pub fn parse_int(s: &str) -> Result<Self, Error>  {
+    pub fn parse_int(s: &str) -> Result<Self, Error> {
         match s.parse::<i64>() {
-            Ok(value) => {
-                Ok(Self::from_int(value))
-            }
-            Err(e) => {
-                Err(Error::InvaldOptionValue(String::from(s)))
-            }
+            Ok(value) => Ok(Self::from_int(value)),
+            Err(e) => Err(Error::InvaldOptionValue(String::from(s))),
         }
     }
 
-    pub fn parse_uint(s: &str) -> Result<Self, Error>  {
+    pub fn parse_uint(s: &str) -> Result<Self, Error> {
         match s.parse::<u64>() {
-            Ok(value) => {
-                Ok(Self::from_uint(value))
-            }
-            Err(e) => {
-                Err(Error::InvaldOptionValue(String::from(s)))
-            }
+            Ok(value) => Ok(Self::from_uint(value)),
+            Err(e) => Err(Error::InvaldOptionValue(String::from(s))),
         }
     }
 
@@ -155,50 +148,51 @@ impl OptValue {
 
     pub fn as_int(&self) -> Option<&i64> {
         match self {
-            Self::Int(v) => { Some(v) }
-            _ => { None } 
+            Self::Int(v) => Some(v),
+            _ => None,
         }
     }
 
     pub fn as_uint(&self) -> Option<&u64> {
         match self {
-            Self::Uint(v) => { Some(v) }
-            _ => { None } 
+            Self::Uint(v) => Some(v),
+            _ => None,
         }
     }
 
     pub fn as_str(&self) -> Option<&String> {
         match self {
-            Self::Str(v) => { Some(v) }
-            _ => { None } 
+            Self::Str(v) => Some(v),
+            _ => None,
         }
     }
-    
+
     pub fn as_bool(&self) -> Option<&bool> {
         match self {
-            Self::Bool(v) => { Some(v) }
-            _ => { None } 
+            Self::Bool(v) => Some(v),
+            Self::Null => Some(&false),
+            _ => None,
         }
     }
 
     pub fn as_arr(&self) -> Option<&Vec<String>> {
         match self {
-            Self::Arr(v) => { Some(v) }
-            _ => { None } 
+            Self::Arr(v) => Some(v),
+            _ => None,
         }
     }
 
     pub fn as_any(&self) -> Option<&Box<dyn Any>> {
         match self {
-            Self::Any(v) => { Some(v) }
-            _ => { None } 
+            Self::Any(v) => Some(v),
+            _ => None,
         }
     }
 
     pub fn is_null(&self) -> bool {
         match self {
-            Self::Null => { true }
-            _ => { false }
+            Self::Null => true,
+            _ => false,
         }
     }
 }
