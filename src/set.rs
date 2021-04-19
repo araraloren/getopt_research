@@ -1,14 +1,12 @@
-
-use crate::opt::Opt;
-use crate::proc::Publisher;
-use crate::proc::Proc;
 use crate::err::Error;
-use crate::utils::Utils;
-use crate::utils::CreatorInfo;
 use crate::id::IdGenerator;
+use crate::opt::Opt;
+use crate::proc::Proc;
+use crate::proc::Publisher;
+use crate::utils::CreatorInfo;
+use crate::utils::Utils;
 
 use std::collections::HashMap;
-
 
 #[derive(Debug)]
 pub struct Set {
@@ -38,57 +36,51 @@ impl Set {
     }
 
     pub fn add_opt(&mut self, n: &str, opt: &str, prefix: &str) -> Result<u64, Error> {
-        let id  = self.idgen.next_id();
-        
+        let id = self.idgen.next_id();
+
         match self.get_utils(n) {
             Some(util) => {
-                let ci  = CreatorInfo::new(opt, prefix)?;
+                let ci = CreatorInfo::new(opt, prefix)?;
                 let opt = util.create(id, &ci);
                 self.opts.push(opt);
                 Ok(id)
             }
-            None => {
-                Err(Error::InvalidOptionType(String::from(n)))
-            }
+            None => Err(Error::InvalidOptionType(String::from(n))),
         }
     }
 
-    pub fn add_opt_alias(&mut self, n: &str, opt: &str, prefix: &str, alias: Vec<String>) -> Result<u64, Error> {
-        let id  = self.idgen.next_id();
-        
+    pub fn add_opt_alias(
+        &mut self,
+        n: &str,
+        opt: &str,
+        prefix: &str,
+        alias: Vec<String>,
+    ) -> Result<u64, Error> {
+        let id = self.idgen.next_id();
+
         match self.get_utils(n) {
             Some(util) => {
-                let ci  = CreatorInfo::new_with_alias(opt, prefix, alias)?;
+                let ci = CreatorInfo::new_with_alias(opt, prefix, alias)?;
                 let opt = util.create(id, &ci);
                 self.opts.push(opt);
                 Ok(id)
             }
-            None => {
-                Err(Error::InvalidOptionType(String::from(n)))
-            }
+            None => Err(Error::InvalidOptionType(String::from(n))),
         }
     }
 
     pub fn add_str_opt(&mut self, opt: &str, prefix: &str) -> Result<u64, Error> {
-        let id  = self.idgen.next_id();
-        
-        match self.get_utils(crate::str::current_type()) {
-            Some(util) => {
-                let ci  = CreatorInfo::new(opt, prefix)?;
-                let opt = util.create(id, &ci);
-                self.opts.push(opt);
-                Ok(id)
-            }
-            None => { // next go here
-                Err(Error::InvalidOptionType(String::from("")))
-            }
-        }
+        self.add_opt(crate::str::current_type(), opt, prefix)
+    }
+
+    pub fn add_bool_opt(&mut self, opt: &str, prefix: &str) -> Result<u64, Error> {
+        self.add_opt(crate::bool::current_type(), opt, prefix)
     }
 
     pub fn get_opt_boxed(&self, id: u64) -> Option<&Box<dyn Opt>> {
         for opt in &self.opts {
             if opt.id() == id {
-                return Some(opt)
+                return Some(opt);
             }
         }
         None
@@ -97,7 +89,7 @@ impl Set {
     pub fn get_opt_boxed_mut(&mut self, id: u64) -> Option<&mut Box<dyn Opt>> {
         for opt in &mut self.opts {
             if opt.id() == id {
-                return Some(opt)
+                return Some(opt);
             }
         }
         None
@@ -106,7 +98,7 @@ impl Set {
     pub fn get_opt(&self, id: u64) -> Option<&dyn Opt> {
         for opt in &self.opts {
             if opt.id() == id {
-                return Some(opt.as_ref())
+                return Some(opt.as_ref());
             }
         }
         None
@@ -115,7 +107,7 @@ impl Set {
     pub fn get_opt_mut(&mut self, id: u64) -> Option<&mut dyn Opt> {
         for opt in &mut self.opts {
             if opt.id() == id {
-                return Some(opt.as_mut())
+                return Some(opt.as_mut());
             }
         }
         None
@@ -127,7 +119,7 @@ impl Set {
         for opt in &self.opts {
             let prefix = String::from(opt.prefix());
 
-            if ! ret.contains(&prefix) {
+            if !ret.contains(&prefix) {
                 ret.push(prefix);
             }
         }
@@ -140,7 +132,7 @@ impl Set {
             publisher.subscribe(
                 self.get_utils(opt.type_name())
                     .unwrap()
-                    .get_info(opt.as_ref())
+                    .get_info(opt.as_ref()),
             );
         }
     }
