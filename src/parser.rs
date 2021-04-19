@@ -1,13 +1,14 @@
-use crate::set::Set;
-use crate::opt::Style;
-use crate::utils::CommandInfo;
+use crate::ctx::Context;
 use crate::ctx::OptContext;
+use crate::opt::Style;
 use crate::proc::Info;
 use crate::proc::Proc;
 use crate::proc::Publisher;
+use crate::set::Set;
+use crate::utils::CommandInfo;
 
-use crate::id::IdGenerator;
 use crate::id::DefaultIdGen;
+use crate::id::IdGenerator;
 
 #[derive(Debug)]
 pub struct Parser {
@@ -16,6 +17,10 @@ pub struct Parser {
     set: Option<Set>,
 
     info: Vec<Box<dyn Info>>,
+
+    arg: Option<String>,
+
+    next_arg: Option<String>,
 }
 
 impl Parser {
@@ -23,7 +28,9 @@ impl Parser {
         Self {
             msg_id_gen: Box::new(DefaultIdGen::new()),
             set: None,
-            info: vec![]
+            info: vec![],
+            arg: None,
+            next_arg: None,
         }
     }
 
@@ -51,27 +58,101 @@ impl Parser {
     }
 
     pub fn parse(&mut self, args: &'static [&str]) {
-        let mut arg_index = 0usize;
+        let mut index = 0usize;
+        let mut count = args.len();
         let mut ci = CommandInfo::new(self.get_prefixs());
 
-        while arg_index < args.len() {
-            let arg = args[arg_index];
-            let mut cp = Proc::new(self.msg_id_gen.next_id());
-            
-            if ci.parse(arg) {
-                dbg!(&ci);
-                cp.append_ctx(Box::new(OptContext::new(
-                    ci.get_prefix().unwrap().clone(), 
-                    ci.get_name().unwrap().clone(),
-                    if arg_index >= args.len() - 1 { None } else { Some(String::from(args[arg_index + 1])) },
-                    Style::Argument,
-                    false
-                )));
-                self.publish(cp);
+        while index < count {
+            self.arg = Some(String::from(args[index]));
+            self.next_arg = if index + 1 >= count {
+                None
+            } else {
+                Some(String::from(args[index + 1]))
+            };
+
+            if ci.parse(self.arg.as_ref().unwrap().as_str()) {
+                if let Some(ctx) = self.gen_argument_style(&ci) {
+                    let mut cp = Proc::new(self.msg_id_gen.next_id());
+
+                    cp.append_ctx(ctx);
+                    self.publish(cp);
+                }
+
+                let multiple_ctx = self.gen_multiple_style(&ci);
+
+                if multiple_ctx.len() > 0 {
+                    let mut cp = Proc::new(self.msg_id_gen.next_id());
+
+                    for ctx in multiple_ctx {
+                        cp.append_ctx(ctx);
+                    }
+                    self.publish(cp);
+                }
+
+                if let Some(ctx) = self.gen_boolean_style(&ci) {
+                    let mut cp = Proc::new(self.msg_id_gen.next_id());
+
+                    cp.append_ctx(ctx);
+                    self.publish(cp);
+                }
             }
 
             ci.reset();
-            arg_index += 1;
+            index += 1;
+        }
+    }
+
+    fn gen_argument_style(&self, ci: &CommandInfo) -> Option<Box<dyn Context>> {
+        match ci.get_value() {
+            Some(value) => Some(Box::new(OptContext::new(
+                ci.get_prefix().unwrap().clone(),
+                ci.get_name().unwrap().clone(),
+                Some(value.clone()),
+                Style::Argument,
+                false,
+            ))),
+            None => Some(Box::new(OptContext::new(
+                ci.get_prefix().unwrap().clone(),
+                ci.get_name().unwrap().clone(),
+                self.next_arg.clone(),
+                Style::Argument,
+                false,
+            ))),
+        }
+    }
+
+    fn gen_multiple_style(&self, ci: &CommandInfo) -> Vec<Box<dyn Context>> {
+        match ci.get_value() {
+            None if ci.get_name().unwrap().len() > 1 => {
+                let mut ret: Vec<Box<dyn Context>> = vec![];
+
+                for char in ci.get_name().unwrap().chars() {
+                    ret.push(Box::new(OptContext::new(
+                        ci.get_prefix().unwrap().clone(),
+                        String::from(char),
+                        None,
+                        Style::Multiple,
+                        false,
+                    )))
+                }
+                ret
+            }
+            _ => {
+                vec![]
+            }
+        }
+    }
+
+    fn gen_boolean_style(&self, ci: &CommandInfo) -> Option<Box<dyn Context>> {
+        match ci.get_value() {
+            Some(_) => None,
+            None => Some(Box::new(OptContext::new(
+                ci.get_prefix().unwrap().clone(),
+                ci.get_name().unwrap().clone(),
+                None,
+                Style::Boolean,
+                false,
+            ))),
         }
     }
 }
@@ -81,9 +162,9 @@ impl Publisher<Proc> for Parser {
         let mut proc = msg;
 
         debug!("get msg: {:?}", proc);
-        for index in 0 .. self.info.len() {
+        for index in 0..self.info.len() {
             let info = self.info.get_mut(index).unwrap();
-            
+
             proc.run(self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap());
         }
     }
