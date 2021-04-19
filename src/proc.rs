@@ -47,11 +47,17 @@ impl Proc {
 
     pub fn run(&mut self, opt: &mut dyn Opt) {
         for ctx in &mut self.ctxs {
-            if ctx.match_opt(opt) {
-                ctx.set_matched();
-                ctx.process(opt);
+            if !ctx.is_matched() {
+                if ctx.match_opt(opt) {
+                    ctx.set_matched();
+                    ctx.process(opt);
+                }
             }
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.ctxs.len()
     }
 }
 
