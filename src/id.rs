@@ -1,4 +1,3 @@
-
 pub trait IdGenerator: std::fmt::Debug {
     fn next_id(&mut self) -> u64;
 
