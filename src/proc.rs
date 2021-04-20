@@ -17,7 +17,7 @@ pub trait Info: Debug {
 }
 
 pub trait Publisher<M: Message> {
-    fn publish(&mut self, msg: M);
+    fn publish(&mut self, msg: M) -> bool;
 
     fn subscribe(&mut self, info: Box<dyn Info>);
 
@@ -31,6 +31,12 @@ pub struct Proc {
 
     // context need process
     ctxs: Vec<Box<dyn Context>>,
+
+    // can we skip next argument
+    skip_next_arg: bool,
+
+    // can we matched success
+    matched: bool,
 }
 
 impl Proc {
@@ -38,6 +44,8 @@ impl Proc {
         Self {
             proc_id: id,
             ctxs: vec![],
+            skip_next_arg: false,
+            matched: false,
         }
     }
 
@@ -46,14 +54,33 @@ impl Proc {
     }
 
     pub fn run(&mut self, opt: &mut dyn Opt) {
+        if self.is_matched() {
+            debug!("skip running -- already matched ...");
+            return;
+        }
+        self.matched = true;
+        self.skip_next_arg = false;
+
         for ctx in &mut self.ctxs {
             if !ctx.is_matched() {
                 if ctx.match_opt(opt) {
                     ctx.set_matched();
                     ctx.process(opt);
+                    self.skip_next_arg = self.skip_next_arg || ctx.is_skip_next_arg();
+                }
+                else {
+                    self.matched = false;
                 }
             }
         }
+    }
+
+    pub fn is_skip_next_arg(&self) -> bool {
+        self.skip_next_arg
+    }
+
+    pub fn is_matched(&self) -> bool {
+        self.matched
     }
 
     pub fn len(&self) -> usize {
