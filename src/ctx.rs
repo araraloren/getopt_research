@@ -1,7 +1,5 @@
 use crate::opt::Opt;
 use crate::opt::Style;
-use crate::proc::Message;
-use crate::proc::Proc;
 
 use std::fmt::Debug;
 
@@ -13,6 +11,8 @@ pub trait Context: Debug {
     fn set_matched(&mut self);
 
     fn is_matched(&self) -> bool;
+
+    fn is_skip_next_arg(&self) -> bool;
 }
 
 #[derive(Debug)]
@@ -68,7 +68,7 @@ impl Context for OptContext {
             ret = ret && opt.match_prefix(self.prefix.as_str());
         }
 
-        debug!("==> {}", ret);
+        debug!("MATCHING ==> {}", ret);
         ret
     }
 
@@ -84,5 +84,9 @@ impl Context for OptContext {
 
     fn is_matched(&self) -> bool {
         self.matched
+    }
+
+    fn is_skip_next_arg(&self) -> bool {
+        self.can_skip
     }
 }
