@@ -1,4 +1,3 @@
-
 mod bool;
 mod ctx;
 mod err;
@@ -45,8 +44,10 @@ fn main() -> Result<(), err::Error> {
 
     set.subscribe_from(&mut parser);
     parser.publish_to(set);
-
-    parser.parse(&["-q", "foo", "--query", "bar", "--other"]);
+    parser.init(["let", "-q", "foo", "--query", "bar", "--other", "we", "are", "noa"]
+                        .iter()
+                        .map(|&s| String::from(s)));
+    parser.parse();
 
     dbg!(parser.set());
 
