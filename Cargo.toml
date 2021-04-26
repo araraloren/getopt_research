@@ -1,5 +1,5 @@
 [package]
-name = "getopt"
+name = "getopt_main"
 version = "0.1.0"
 authors = ["lance"]
 edition = "2018"
@@ -7,6 +7,4 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-thiserror = "1.0.24"
-simplelog = "0.10.0"
-log = "0.4.14"
+getopt-rs = { path = "getopt-rs" }
