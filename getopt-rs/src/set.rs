@@ -11,6 +11,7 @@ use crate::proc::Proc;
 use crate::id::Identifier;
 use crate::utils::Utils;
 use crate::utils::CreateInfo;
+use crate::utils::FilterInfo;
 
 pub trait Set: Debug {
     fn add_utils(&mut self, utils: Box<dyn Utils>) -> Result<bool>;
@@ -23,13 +24,21 @@ pub trait Set: Debug {
 
     fn add_opt_ci(&mut self, ci: &CreateInfo) -> Result<Identifier>;
 
-    fn get_opt(&self, id: Identifier) -> Option<& dyn Opt>;
+    fn add_opt_raw(&mut self, opt: Box<dyn Opt>);
 
-    fn get_opt_n(&self, name: &str) -> Option<&dyn Opt>;
+    fn get_opt_i(&self, id: Identifier) -> Option<& dyn Opt>;
 
-    fn get_opt_mut(&self, id: Identifier) -> Option<&mut dyn Opt>;
+    fn get_opt_mut_i(&self, id: Identifier) -> Option<&mut dyn Opt>;
 
-    fn get_opt_mut_n(&self, name: &str) -> Option<&mut dyn Opt>;
+    fn get_opt(&self, name: &str) -> Filter;
+
+    fn get_opt_mut(&self, name: &str) -> FilterMut;
+
+    fn get_commit(&mut self) -> Commit;
+
+    fn get_filter(&self) -> Filter;
+
+    fn get_filter_mut(&mut self) -> FilterMut;
 
     fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>);
 }
@@ -98,6 +107,41 @@ impl<'a> Commit<'a> {
 #[derive(Debug)]
 pub struct Filter<'a> {
     ref_set: &'a dyn Set,
+
+    filter_info: FilterInfo,
+}
+
+impl<'a> Filter<'a> {
+    pub fn new(set: &'a mut dyn Set, fi: FilterInfo) -> Self {
+        Self {
+            ref_set: set,
+            filter_info: fi,
+        }
+    }
+
+    pub fn set_deactivate_style(&mut self, deactivate: bool) {
+        self.filter_info.set_deactivate_style(deactivate);
+    }
+
+    pub fn set_optional(&mut self, optional: bool) {
+        self.filter_info.set_optional(optional);
+    }
+
+    pub fn set_type_name(&mut self, opt_type: &str) {
+        self.filter_info.set_type_name(opt_type);
+    }
+
+    pub fn set_name(&mut self, opt_name: &str) {
+        self.filter_info.set_name(opt_name);
+    }
+
+    pub fn set_prefix(&mut self, prefix: &str) {
+        self.filter_info.set_prefix(prefix);
+    }
+
+    pub fn set_index(&mut self, index: OptIndex) {
+        self.filter_info.set_index(index);
+    }
 }
 
 #[derive(Debug)]
