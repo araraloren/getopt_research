@@ -25,7 +25,7 @@ pub struct CreateInfo {
 
     optional: bool,
 
-    opt_type: String,
+    type_name: String,
 
     opt_name: String,
 
@@ -49,7 +49,7 @@ impl CreateInfo {
         deafult_value: OptValue,
     ) -> Self {
         Self {
-            opt_type: String::from(type_name),
+            type_name: String::from(type_name),
             opt_name: String::from(name),
             opt_prefix: String::from(prefix),
             opt_index: index,
@@ -60,65 +60,18 @@ impl CreateInfo {
         }
     }
 
-    /// Parse input string `<name>=<type>[!][/]@<index>`,
-    /// such as `o=a!`, "o=p@1". The option name is `o`, and type is `a`.
-    /// `!` means the option is optional or not.
-    /// `/` means the option is deactivate style or not.
-    pub fn parse(s: &str, prefix: &str) -> Result<Self> {
-        const SPLIT: &str = "=";
-        const DEACTIVATE: &str = "/";
-        const NO_OPTIONAL: &str = "!";
-        const INDEX: &str = "@";
-
-        let splited: Vec<_> = s.split(SPLIT).collect();
-        let mut type_last_index = 0;
-        let mut deactivate = false;
-        let mut optional = true;
-        let mut opt_index = OptIndex::Null;
-
-        if splited.len() == 2 {
-            if let Some(index) = splited[1].rfind(DEACTIVATE) {
-                deactivate = true;
-                if index != 0 {
-                    type_last_index = index;
-                }
-            }
-            if let Some(index) = splited[1].rfind(NO_OPTIONAL) {
-                optional = false;
-                if index != 0 && (index < type_last_index || type_last_index == 0) {
-                    type_last_index = index;
-                }
-            }
-            if let Some(index) = splited[1].rfind(INDEX) {
-                match splited[1].split_at(index + 1).1.parse::<i32>() {
-                    Ok(v) => {
-                        opt_index = OptIndex::new(v);
-                    }
-                    Err(_) => {
-                        return Err(Error::InvalidOptionStr(String::from(s)))
-                    }
-                }
-                if index != 0 && (index < type_last_index || type_last_index == 0) {
-                    type_last_index = index;
-                }
-            }
-            let (opt_type, _) = if type_last_index == 0 {
-                (splited[1], splited[0] /* fine, not using*/)
-            } else {
-                splited[1].split_at(type_last_index)
-            };
-
-            return Ok(Self::new(
-                opt_type,
-                splited[0],
-                prefix,
-                opt_index,
-                deactivate,
-                optional,
-                OptValue::Null,
-            ));
-        }
-        Err(Error::InvalidOptionStr(String::from(s)))
+    pub fn parse(s: &str) -> Result<Self> {
+        let pr = parse_opt_string(s)?;
+        Ok(Self {
+            type_name: pr.type_name,
+            opt_name: pr.opt_name,
+            opt_prefix: pr.opt_prefix,
+            opt_index: pr.opt_index,
+            deactivate: pr.deactivate,
+            optional: pr.optional,
+            opt_alias: vec![],
+            opt_value: OptValue::Null,
+        })
     }
 
     /// Check if the create information is correct
@@ -146,7 +99,7 @@ impl CreateInfo {
 
     /// Return the option type name
     pub fn get_type_name(&self) -> &str {
-        &self.opt_type
+        &self.type_name
     }
 
     /// Return the option name
@@ -185,7 +138,7 @@ impl CreateInfo {
     }
 
     pub fn set_type_name(&mut self, opt_type: &str) {
-        self.opt_type = String::from(opt_type);
+        self.type_name = String::from(opt_type);
     }
 
     pub fn set_name(&mut self, opt_name: &str) {
@@ -220,6 +173,175 @@ impl CreateInfo {
     pub fn clr_alias(&mut self) {
         self.opt_alias.clear();
     }
+}
+
+#[derive(Debug)]
+pub struct FilterInfo {
+    deactivate: bool,
+
+    optional: bool,
+
+    type_name: String,
+
+    opt_name: String,
+
+    opt_prefix: String,
+
+    opt_index: OptIndex,
+}
+
+impl FilterInfo {
+    pub fn new() -> Self {
+        Self {
+            deactivate: false,
+            optional: true,
+            type_name: String::default(),
+            opt_name: String::default(),
+            opt_prefix: String::default(),
+            opt_index: OptIndex::Null,
+        }
+    }
+
+    pub fn parse(opt: &str) -> Result<Self> {
+        let pr = parse_opt_string(opt)?;
+        Ok(Self {
+            deactivate: pr.deactivate,
+            optional: pr.optional,
+            type_name: pr.type_name,
+            opt_name: pr.opt_name,
+            opt_prefix: pr.opt_prefix,
+            opt_index: pr.opt_index,
+        })
+    }
+    
+    /// Return true if the option support `-/a` style disable the option
+    pub fn is_deactivate_style(&self) -> bool {
+        self.deactivate
+    }
+
+    /// Return true if the option is force required
+    pub fn is_optional(&self) -> bool {
+        self.optional
+    }
+
+    /// Return the option type name
+    pub fn get_type_name(&self) -> &str {
+        &self.type_name
+    }
+
+    /// Return the option name
+    pub fn get_name(&self) -> &str {
+        &self.opt_name
+    }
+
+    /// Return the option prefix
+    pub fn get_prefix(&self) -> &str {
+        &self.opt_prefix
+    }
+
+    /// Return the option index
+    pub fn get_index(&self) -> &OptIndex {
+        &self.opt_index
+    }
+
+    pub fn set_deactivate_style(&mut self, deactivate: bool) {
+        self.deactivate = deactivate;
+    }
+
+    pub fn set_optional(&mut self, optional: bool) {
+        self.optional = optional;
+    }
+
+    pub fn set_type_name(&mut self, opt_type: &str) {
+        self.type_name = String::from(opt_type);
+    }
+
+    pub fn set_name(&mut self, opt_name: &str) {
+        self.opt_name = String::from(opt_name);
+    }
+
+    pub fn set_prefix(&mut self, prefix: &str) {
+        self.opt_prefix = String::from(prefix);
+    }
+
+    pub fn set_index(&mut self, index: OptIndex) {
+        self.opt_index = index;
+    }
+}
+
+#[derive(Debug)]
+struct ParseResult {
+    type_name: String,
+
+    opt_name: String,
+
+    opt_prefix: String,
+
+    deactivate: bool,
+
+    optional: bool,
+
+    opt_index: OptIndex,
+}
+
+/// Parse input string `<name>=<type>[!][/]@<index>`,
+/// such as `o=a!`, "o=p@1". The option name is `o`, and type is `a`.
+/// `!` means the option is optional or not.
+/// `/` means the option is deactivate style or not.
+fn parse_opt_string(s: &str) -> Result<ParseResult> {
+    const SPLIT: &str = "=";
+    const DEACTIVATE: &str = "/";
+    const NO_OPTIONAL: &str = "!";
+    const INDEX: &str = "@";
+
+    let splited: Vec<_> = s.split(SPLIT).collect();
+    let mut type_last_index = 0;
+    let mut deactivate = false;
+    let mut optional = true;
+    let mut opt_index = OptIndex::Null;
+
+    if splited.len() == 2 {
+        if let Some(index) = splited[1].rfind(DEACTIVATE) {
+            deactivate = true;
+            if index != 0 {
+                type_last_index = index;
+            }
+        }
+        if let Some(index) = splited[1].rfind(NO_OPTIONAL) {
+            optional = false;
+            if index != 0 && (index < type_last_index || type_last_index == 0) {
+                type_last_index = index;
+            }
+        }
+        if let Some(index) = splited[1].rfind(INDEX) {
+            match splited[1].split_at(index + 1).1.parse::<i32>() {
+                Ok(v) => {
+                    opt_index = OptIndex::new(v);
+                }
+                Err(_) => {
+                    return Err(Error::InvalidOptionStr(String::from(s)))
+                }
+            }
+            if index != 0 && (index < type_last_index || type_last_index == 0) {
+                type_last_index = index;
+            }
+        }
+        let (opt_type, _) = if type_last_index == 0 {
+            (splited[1], splited[0] /* fine, not using*/)
+        } else {
+            splited[1].split_at(type_last_index)
+        };
+
+        return Ok(ParseResult {
+            type_name: String::from(opt_type),
+            opt_name: String::from(splited[0]),
+            opt_prefix: String::default(),
+            deactivate,
+            optional,
+            opt_index,
+        })
+    }
+    Err(Error::InvalidOptionStr(String::from(s)))
 }
 
 #[cfg(test)]
@@ -283,7 +405,7 @@ mod tests {
         ];
 
         for case in test_cases.iter() {
-            match CreateInfo::parse(case.0, "") {
+            match CreateInfo::parse(case.0) {
                 Ok(ci) => {
                     let test_ci = case.1.as_ref().unwrap();
 
