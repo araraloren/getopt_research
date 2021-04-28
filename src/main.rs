@@ -32,8 +32,8 @@ fn accept_message<M: Message>(m: M) {
 fn main() {
     accept_message(Box::new(DefaultProc(Identifier::new(0))) as Box<dyn Proc>);
 
-    dbg!(getopt_rs::utils::CreateInfo::parse("o=a", "").unwrap());
-    dbg!(getopt_rs::utils::CreateInfo::parse("o=a!", "").unwrap());
+    dbg!(getopt_rs::utils::CreateInfo::parse("o=a").unwrap());
+    dbg!(getopt_rs::utils::CreateInfo::parse("o=a!").unwrap());
 
     let mut w = C(vec![]);
 
