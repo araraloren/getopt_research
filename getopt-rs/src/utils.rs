@@ -341,7 +341,21 @@ fn parse_opt_string(s: &str) -> Result<ParseResult> {
             opt_index,
         })
     }
-    Err(Error::InvalidOptionStr(String::from(s)))
+    else {
+        if s.is_empty() {
+            Ok(ParseResult {
+                type_name: String::default(),
+                opt_name: String::default(),
+                opt_prefix: String::default(),
+                deactivate,
+                optional,
+                opt_index,
+            })
+        }
+        else {
+            Err(Error::InvalidOptionStr(String::from(s)))
+        }
+    }
 }
 
 #[cfg(test)]
