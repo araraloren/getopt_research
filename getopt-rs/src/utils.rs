@@ -19,7 +19,7 @@ pub trait Utils: Debug {
     fn gen_info(&self, opt: &dyn Opt) -> Box<dyn Info>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CreateInfo {
     deactivate: bool,
 
@@ -175,7 +175,7 @@ impl CreateInfo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FilterInfo {
     deactivate: bool,
 
