@@ -311,6 +311,12 @@ impl OptValue {
     }
 }
 
+impl Default for OptValue {
+    fn default() -> Self {
+        OptValue::Null
+    }
+}
+
 impl OptIndex {
     pub fn new(index: i32) -> Self {
         if index > 0 {
@@ -326,5 +332,11 @@ impl OptIndex {
             Self::Null => true,
             _ => false,
         }
+    }
+}
+
+impl Default for OptIndex {
+    fn default() -> Self {
+        OptIndex::Null
     }
 }
