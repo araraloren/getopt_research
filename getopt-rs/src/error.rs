@@ -24,4 +24,13 @@ pub enum Error {
 
     #[error("given option type not support deactivate style")]
     NotSupportDeactivateStyle,
+
+    #[error("the given type is exists: `{0}`")]
+    DuplicateOptionType(String),
+
+    #[error("`{0}` need an argument")]
+    ArgumentRequired(String),
+
+    #[error("option `{0}` is force required")]
+    OptionForceRequired(String),
 }
