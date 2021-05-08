@@ -3,13 +3,15 @@ use std::fmt::Debug;
 
 use crate::opt::Opt;
 use crate::opt::Style;
+use crate::error::Result;
+use crate::error::Error;
 
 pub trait Context: Debug {
     /// Check if the opt is matched with current context
     fn match_opt(&self, opt: &dyn Opt) -> bool;
 
     /// Process the option if matched successful
-    fn process(&mut self, opt: &mut dyn Opt);
+    fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
 
     /// Return true if the context already matched successful
     fn is_matched(&self) -> bool;
@@ -22,12 +24,12 @@ pub trait Context: Debug {
 /// It will check the option name, prefix, style and alias.
 /// It will set option value if matched.
 #[derive(Debug)]
-pub struct OptContext<'a, 'b, 'c> {
-    opt_prefix: &'a str,
+pub struct OptContext {
+    opt_prefix: String,
 
-    opt_name: &'b str,
+    opt_name: String,
 
-    next_argument: Option<&'c str>,
+    next_argument: Option<String>,
 
     style: Style,
 
@@ -36,11 +38,11 @@ pub struct OptContext<'a, 'b, 'c> {
     matched: bool,
 }
 
-impl <'a, 'b, 'c> OptContext<'a, 'b, 'c> {
+impl OptContext {
     pub fn new(
-        prefix: &'a str,
-        name: &'b str,
-        arg: Option<&'c str>,
+        prefix: String,
+        name: String,
+        arg: Option<String>,
         style: Style,
         skip_next_arg: bool
     ) -> Self {
@@ -54,17 +56,17 @@ impl <'a, 'b, 'c> OptContext<'a, 'b, 'c> {
         }
     }
 
-    pub fn set_prefix(&mut self, prefix: &'a str) -> &mut Self {
+    pub fn set_prefix(&mut self, prefix: String) -> &mut Self {
         self.opt_prefix = prefix;
         self
     }
 
-    pub fn set_name(&mut self, name: &'b str) -> &mut Self {
+    pub fn set_name(&mut self, name: String) -> &mut Self {
         self.opt_name = name;
         self
     }
 
-    pub fn set_next_argument(&mut self, arg: Option<&'c str>) -> &mut Self {
+    pub fn set_next_argument(&mut self, arg: Option<String>) -> &mut Self {
         self.next_argument = arg;
         self
     }
@@ -80,20 +82,30 @@ impl <'a, 'b, 'c> OptContext<'a, 'b, 'c> {
     }
 }
 
-impl<'a, 'b, 'c> Context for OptContext<'a, 'b, 'c> {
+impl Context for OptContext {
     fn match_opt(&self, opt: &dyn Opt) -> bool {
         let matched = 
             opt.match_style(self.style.clone()) &&
-            opt.match_prefix(self.opt_prefix) &&
-            (opt.match_name(self.opt_name) || opt.match_alias(self.opt_prefix, self.opt_name));
+            ((opt.match_name(self.opt_name.as_str()) && opt.match_prefix(self.opt_prefix.as_str()))
+                || opt.match_alias(&self.opt_prefix, &self.opt_name));
+        debug!("Match Opt<{:?}> {:?}: {}", opt.id(), opt, matched);
         matched
     }
 
-    fn process(&mut self, opt: &mut dyn Opt) {
+    fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
         self.matched = true;
-        if let Some(v) = opt.parse_value(self.next_argument) {
-            opt.set_value(v);
+        debug!("Match successed => {:?} : Opt<{:?}>", self, opt.id());
+        if opt.is_need_argument() && self.next_argument.is_none() {
+            return Err(Error::ArgumentRequired(format!("{}{}", opt.prefix(), opt.name())));
         }
+        let mut value = &String::default();
+
+        if let Some(v) = &self.next_argument {
+            value = v;
+        }
+
+        opt.set_value(opt.parse_value(value.as_str())?);
+        Ok(true)
     }
 
     fn is_matched(&self) -> bool {
