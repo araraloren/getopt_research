@@ -2,24 +2,26 @@
 use crate::error::Result;
 use crate::error::Error;
 
-pub trait Iterator {
+use std::fmt::Debug;
+
+pub trait Iterator : Debug {
     fn set_prefix(&mut self, prefix: Vec<String>);
 
-    fn set_args<T: std::iter::Iterator<Item = String>>(&mut self, args: T);
+    fn set_args(&mut self, args: &mut dyn std::iter::Iterator<Item = String>);
 
     fn reach_end(&self) -> bool;
 
     fn fill_current_and_next(&mut self);
 
-    fn current(&self) -> Option<&String>;
+    fn current(&self) -> &Option<String>;
 
     fn current_index(&self) -> usize;
 
     fn count(&self) -> usize;
 
-    fn next(&self) -> Option<&String>;
+    fn next(&self) -> &Option<String>;
 
-    fn increment(&mut self);
+    fn skip(&mut self);
 
     fn parse(&self) -> Result<Argument>;
 
@@ -89,12 +91,14 @@ impl Iterator for ArgIterator {
     fn set_prefix(&mut self, prefixs: Vec<String>) {
         let mut prefixs = prefixs;
         prefixs.sort_by(|a: &String, b: &String| b.len().cmp(&a.len()));
+        debug!("Set all prefix to => {:?}", prefixs);
         self.cache_prefixs = prefixs;
     }
 
-    fn set_args<T: std::iter::Iterator<Item = String>>(&mut self, args: T) {
+    fn set_args(&mut self, args: &mut dyn std::iter::Iterator<Item = String>) {
         self.args = args.map(|s|s).collect();
         self.total = self.args.len();
+        debug!("Set command line to => {:?}", self.args);
     }
 
     fn reach_end(&self) -> bool {
@@ -110,8 +114,8 @@ impl Iterator for ArgIterator {
         };
     }
 
-    fn current(&self) -> Option<&String> {
-        self.arg.as_ref()
+    fn current(&self) -> &Option<String> {
+        &self.arg
     }
 
     fn current_index(&self) -> usize {
@@ -122,11 +126,11 @@ impl Iterator for ArgIterator {
         self.total
     }
 
-    fn next(&self) -> Option<&String> {
-        self.next_arg.as_ref()
+    fn next(&self) -> &Option<String> {
+        &self.next_arg
     }
 
-    fn increment(&mut self) {
+    fn skip(&mut self) {
         self.index += 1;
     }
 
@@ -141,17 +145,17 @@ impl Iterator for ArgIterator {
 
                 for prefix in &self.cache_prefixs {
                     if s.starts_with(prefix) {
-                        p_prefix = Some(String::from(prefix));
+                        p_prefix = Some(prefix.to_owned());
                         let (_, left_str) = s.split_at(prefix.len());
                         let name_or_value: Vec<_> = left_str.split(SPLIT).collect();
 
                         match name_or_value.len() {
                             1 => {
-                                p_name = Some(String::from(left_str));
+                                p_name = Some(left_str.to_owned());
                             }
                             2 => {
-                                p_name = Some(String::from(name_or_value[0]));
-                                p_value = Some(String::from(name_or_value[1]));
+                                p_name = Some(name_or_value[0].to_owned());
+                                p_value = Some(name_or_value[1].to_owned());
                             }
                             _ => {
                                 continue;
