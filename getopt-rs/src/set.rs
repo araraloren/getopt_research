@@ -2,24 +2,24 @@
 use std::fmt::Debug;
 use std::slice::Iter;
 use std::slice::IterMut;
-use std::slice::SliceIndex;
 use std::ops::Index;
 use std::ops::IndexMut;
 use std::collections::HashMap;
 
 use crate::opt::Opt;
 use crate::opt::OptValue;
-use crate::opt::OptIndex;
+use crate::opt::NonOptIndex;
 use crate::error::Error;
 use crate::error::Result;
 use crate::proc::Publisher;
+use crate::proc::Subscriber;
 use crate::proc::Proc;
 use crate::id::Identifier;
 use crate::utils::Utils;
 use crate::utils::CreateInfo;
 use crate::utils::FilterInfo;
 
-pub trait Set: Debug {
+pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut<Identifier> {
     fn add_utils(&mut self, utils: Box<dyn Utils>) -> Result<bool>;
 
     fn rem_utils(&mut self, type_name: &str) -> Result<bool>;
@@ -58,12 +58,15 @@ pub trait Set: Debug {
     fn find_all_mut(&mut self, fi: &FilterInfo) -> Vec<Option<&mut dyn Opt>>;
 
     
-    fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>);
-
-    
     fn iter(&self) -> Iter<Box<dyn Opt>>;
 
     fn iter_mut(&mut self) -> IterMut<Box<dyn Opt>>;
+
+    fn get_all_prefixs(&self) -> Vec<String>;
+
+    fn check(&self) -> Result<bool>;
+
+    fn reset(&mut self);
 }
 
 #[derive(Debug)]
@@ -82,14 +85,26 @@ impl DefaultSet {
     }
 }
 
+impl Subscriber for DefaultSet {
+    fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>) {
+        for opt in &self.opts {
+            publisher.reg_subscriber(
+                self.get_utils(opt.type_name())
+                    .unwrap()
+                    .gen_info(opt.as_ref()),
+            );
+        }
+    }
+}
+
 impl Set for DefaultSet {
     fn add_utils(&mut self, utils: Box<dyn Utils>) -> Result<bool> {
         if ! self.utils.contains_key(utils.type_name()) {
-            self.utils.insert(String::from(utils.type_name()), utils);
+            self.utils.insert(utils.type_name().to_owned(), utils);
             Ok(true)
         }
         else {
-            Err(Error::DuplicateOptionType(String::from(utils.type_name())))
+            Err(Error::DuplicateOptionType(utils.type_name().to_owned()))
         }
     }
 
@@ -99,7 +114,7 @@ impl Set for DefaultSet {
             Ok(true)
         }
         else {
-            Err(Error::InvalidOptionType(String::from(type_name)))
+            Err(Error::InvalidOptionType(type_name.to_owned()))
         }
     }
 
@@ -125,17 +140,20 @@ impl Set for DefaultSet {
 
         match self.get_utils(ci.get_type_name()) {
             Some(util) => {
-                let opt = util.create(id, &ci);
+                let opt = util.create(id, &ci)?;
 
                 self.opts.push(opt);
                 Ok(id)
             }
-            None => Err(Error::InvalidOptionType(String::from(ci.get_type_name())))
+            None => Err(Error::InvalidOptionType(ci.get_type_name().to_owned()))
         }
     }
 
     fn add_opt_raw(&mut self, opt: Box<dyn Opt>) -> Result<Identifier> {
+        let mut opt = opt;
         let id = Identifier::new(self.opts.len() as u64);
+
+        opt.set_id(id); // reset the id
         self.opts.push(opt);
         Ok(id)
     }
@@ -185,10 +203,7 @@ impl Set for DefaultSet {
     
     fn find(&self, fi: &FilterInfo) -> Option<&dyn Opt> {
         for opt in self.opts.iter() {
-            if opt.type_name() == fi.get_type_name() 
-            && opt.match_name(fi.get_name())
-            && opt.match_prefix(fi.get_prefix())
-            && opt.index() == *fi.get_index() {
+            if fi.match_opt(opt.as_ref()) {
                 return Some(opt.as_ref());
             }
         }
@@ -199,10 +214,7 @@ impl Set for DefaultSet {
         let mut opts = vec![];
 
         for opt in self.opts.iter() {
-            if opt.type_name() == fi.get_type_name() 
-            && opt.match_name(fi.get_name())
-            && opt.match_prefix(fi.get_prefix())
-            && opt.index() == *fi.get_index() {
+            if fi.match_opt(opt.as_ref()) {
                 opts.push(Some(opt.as_ref()))
             }
         }
@@ -211,10 +223,7 @@ impl Set for DefaultSet {
 
     fn find_mut(&mut self, fi: &FilterInfo) -> Option<&mut dyn Opt> {
         for opt in self.opts.iter_mut() {
-            if opt.type_name() == fi.get_type_name() 
-            && opt.match_name(fi.get_name())
-            && opt.match_prefix(fi.get_prefix())
-            && opt.index() == *fi.get_index() {
+            if fi.match_opt(opt.as_ref()) {
                 return Some(opt.as_mut());
             }
         }
@@ -225,27 +234,12 @@ impl Set for DefaultSet {
         let mut opts: Vec<Option<&mut dyn Opt>> = vec![];
 
         for opt in self.opts.iter_mut() {
-            if opt.type_name() == fi.get_type_name() 
-            && opt.match_name(fi.get_name())
-            && opt.match_prefix(fi.get_prefix())
-            && opt.index() == *fi.get_index() {
+            if fi.match_opt(opt.as_ref()) {
                 opts.push(Some(opt.as_mut()))
             }
         }
         opts
     }
-
-    
-    fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>) {
-        for opt in &self.opts {
-            publisher.subscribe(
-                self.get_utils(opt.type_name())
-                    .unwrap()
-                    .gen_info(opt.as_ref()),
-            );
-        }
-    }
-
     
     fn iter(&self) -> Iter<Box<dyn Opt>> {
         self.opts.iter()
@@ -253,6 +247,53 @@ impl Set for DefaultSet {
 
     fn iter_mut(&mut self) -> IterMut<Box<dyn Opt>> {
         self.opts.iter_mut()
+    }
+
+    fn get_all_prefixs(&self) -> Vec<String> {
+        let mut ret: Vec<String> = vec![];
+
+        for opt in &self.opts {
+            if !ret.iter().find(|s|s.as_str() == opt.prefix()).is_some() {
+                ret.push(opt.prefix().to_owned());
+            }
+
+            if let Some(alias) = opt.alias() {
+                for alias in alias.iter() {
+                    if !ret.iter().find(|s|s.as_str() == alias.0).is_some() {
+                        ret.push(alias.0.to_owned());
+                    }
+                }
+            }
+        }
+
+        ret
+    }
+
+    fn check(&self) -> Result<bool> {
+        for opt in &self.opts {
+            opt.check()?;
+        }
+        Ok(true)
+    }
+
+    fn reset(&mut self) {
+        for opt in self.opts.iter_mut() {
+            opt.reset_value();
+        }
+    }
+}
+
+impl Index<Identifier> for DefaultSet {
+    type Output = dyn Opt;
+
+    fn index(&self, index: Identifier) -> &Self::Output {
+        self.opts[index.get() as usize].as_ref()
+    }
+}
+
+impl IndexMut<Identifier> for DefaultSet {
+    fn index_mut(&mut self, index: Identifier) -> &mut Self::Output {
+        self.opts[index.get() as usize].as_mut()
     }
 }
 
@@ -291,16 +332,16 @@ impl<'a> Commit<'a> {
         self.create_info.set_prefix(prefix);
     }
 
-    pub fn set_index(&mut self, index: OptIndex) {
+    pub fn set_index(&mut self, index: NonOptIndex) {
         self.create_info.set_index(index);
     }
 
-    pub fn add_alias(&mut self, alias: &str) {
-        self.create_info.add_alias(alias);
+    pub fn add_alias(&mut self, prefix: &str, name: &str) {
+        self.create_info.add_alias(prefix, name);
     }
 
-    pub fn rem_alias(&mut self, s: &str) {
-        self.create_info.rem_alias(s);
+    pub fn rem_alias(&mut self, prefix: &str, name: &str) {
+        self.create_info.rem_alias(prefix, name);
     }
 
     pub fn clr_alias(&mut self) {
@@ -312,7 +353,6 @@ impl<'a> Commit<'a> {
     }
 
     pub fn commit(&mut self) -> Result<Identifier> {
-        self.create_info.check()?;
         self.ref_set.add_opt_ci(&self.create_info)
     }
 }
@@ -352,7 +392,7 @@ impl<'a> Filter<'a> {
         self.filter_info.set_prefix(prefix);
     }
 
-    pub fn set_index(&mut self, index: OptIndex) {
+    pub fn set_index(&mut self, index: NonOptIndex) {
         self.filter_info.set_index(index);
     }
 
@@ -400,7 +440,7 @@ impl<'a> FilterMut<'a> {
         self.filter_info.set_prefix(prefix);
     }
 
-    pub fn set_index(&mut self, index: OptIndex) {
+    pub fn set_index(&mut self, index: NonOptIndex) {
         self.filter_info.set_index(index);
     }
 
