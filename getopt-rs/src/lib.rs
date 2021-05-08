@@ -7,6 +7,11 @@ pub mod set;
 pub mod arg;
 pub mod proc;
 pub mod utils;
+pub mod parser;
+pub mod getopt;
+
+#[macro_use]
+extern crate log;
 
 pub mod prelude {
     pub use crate::opt::{Style};
