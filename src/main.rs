@@ -1,87 +1,81 @@
-use getopt_rs::ctx::Context;
+
+use getopt_rs::parser::ForwardParser;
+use getopt_rs::set::DefaultSet;
+use getopt_rs::set::Set;
+use getopt_rs::proc::Subscriber;
+use getopt_rs::parser::Parser;
+use getopt_rs::id::DefaultIdGen;
 use getopt_rs::id::Identifier;
-use getopt_rs::opt::Opt;
-use getopt_rs::proc::Message;
-use getopt_rs::proc::Proc;
-
-#[derive(Debug)]
-struct DefaultProc(Identifier);
-
-impl Proc for DefaultProc {
-    fn id(&self) -> Identifier {
-        self.0
-    }
-
-    fn append_ctx(&mut self, ctx: Box<dyn Context>) {}
-
-    fn process(&mut self, opt: &mut dyn Opt) {}
-
-    fn is_need_argument(&self) -> bool {
-        true
-    }
-
-    fn is_matched(&self) -> bool {
-        true
-    }
-}
-
-fn accept_message<M: Message>(m: M) {
-    dbg!(m.id());
-}
+use getopt_rs::arg::Iterator;
+use getopt_rs::arg::ArgIterator;
+use getopt_rs::opt;
+use simplelog::*;
 
 fn main() {
-    accept_message(Box::new(DefaultProc(Identifier::new(0))) as Box<dyn Proc>);
+    CombinedLogger::init(vec![
+        SimpleLogger::new(LevelFilter::Warn, Config::default()),
+        SimpleLogger::new(LevelFilter::Debug, Config::default()),
+        SimpleLogger::new(LevelFilter::Error, Config::default()),
+        SimpleLogger::new(LevelFilter::Info, Config::default()),
+    ])
+    .unwrap();
 
-    dbg!(getopt_rs::utils::CreateInfo::parse("o=a").unwrap());
-    dbg!(getopt_rs::utils::CreateInfo::parse("o=a!").unwrap());
+    let mut set = DefaultSet::new();
+    let mut parser = ForwardParser::new(Box::new(DefaultIdGen::new(Identifier::new(0))));
 
-    let mut w = C(vec![]);
+    set.add_utils(Box::new(opt::str::StrUtils::new())).unwrap();
+    set.add_utils(Box::new(opt::bool::BoolUtils::new())).unwrap();
+    set.add_utils(Box::new(opt::arr::ArrUtils::new())).unwrap();
+    set.add_utils(Box::new(opt::int::IntUtils::new())).unwrap();
+    set.add_utils(Box::new(opt::example::PathUtils::new())).unwrap();
 
-    let mut b = w.a();
+    if let Ok(mut commit) = set.add_opt("-|q=str") {
+        commit.add_alias("--", "query");
+        commit.commit().unwrap();
+    }
 
-    b.t(1);
-    b.t(2);
-    b.c();
+    if let Ok(mut commit) = set.add_opt("-|f=bool") {
+        commit.add_alias("--", "force");
+        commit.commit().unwrap();
+    }
     
-    dbg!(w);
-}
-
-#[derive(Debug)]
-pub struct B<'a> {
-    v: Vec<i32>,
-    a: &'a mut A,
-}
-
-pub trait A: std::fmt::Debug {
-    fn a(&mut self) -> B;
-
-    fn p(&mut self, i: i32);
-}
-
-#[derive(Debug)]
-pub struct C(Vec<i32>);
-
-impl A for C {
-    fn a(&mut self) -> B {
-        B {
-            v: vec![],
-            a: self,
-        }
+    if let Ok(mut commit) = set.add_opt("-|k=arr") {
+        commit.add_alias("--", "keyword");
+        commit.commit().unwrap();
     }
 
-    fn p(&mut self, i: i32) {
-        self.0.push(i);
+    if let Ok(mut commit) = set.add_opt("-|id=int") {
+        commit.add_alias("--", "identifier");
+        commit.commit().unwrap();
+    }
+
+    if let Ok(mut commit) = set.add_opt("-|i=path") {
+        commit.add_alias("--", "import");
+        commit.set_deafult_value(getopt_rs::opt::OptValue::from_any(Box::new(std::path::PathBuf::from("E:\\rust"))));
+        commit.commit().unwrap();
+    }
+
+    set.subscribe_from(&mut parser);
+    parser.publish_to(Box::new(set));
+
+    let mut ai = ArgIterator::new();
+
+    ai.set_args(
+        &mut ["let", "--query", "bar", "--force", "-id", "-123", "-i", "E:\\rust\\getopt", "-k", "we", "--keyword", "are", "noa"]
+        .iter()
+        .map(|&s| String::from(s))
+    );
+    parser.parse(&mut ai).unwrap();
+
+    dbg!( parser.set().as_ref().unwrap().filter("force").unwrap().find() );
+    dbg!( parser.set().as_ref().unwrap().filter("-|id").unwrap().find() );
+
+    use std::path::PathBuf;
+
+    if let Ok(filter) = parser.set().as_ref().unwrap().filter("-|i") {
+        let value = filter.find().unwrap().value();
+        
+        dbg!(value.downcast_ref::<PathBuf>());
     }
 }
 
-impl<'a> B<'a> {
-    fn t(&mut self, i: i32) {
-        self.v.push(i);
-    }
-
-    fn c(&mut self) {
-        for v in &self.v {
-            self.a.p(*v)
-        }
-    }
-}
