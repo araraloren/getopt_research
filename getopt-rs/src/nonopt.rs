@@ -62,12 +62,9 @@ pub mod pos {
     opt_def!(PosNonOpt, Pos, NonOpt);
 
     opt_type_def!(
-        PosNonOpt, 
+        PosNonOpt,
         current_type(),
-        false,
-        false,
-        style,
-        Style::Pos
+        { style, Style::Pos }
     );
 
     opt_callback_def!(
@@ -221,13 +218,13 @@ pub mod cmd {
     }
 
     impl CmdNonOpt {
-        pub fn new(id: IIdentifier, name: String, optional: bool, index: NonOptIndex) -> Self {
+        pub fn new(id: IIdentifier, name: String) -> Self {
             Self {
                 id,
                 name,
-                optional,
+                optional: false,
                 value: OptValue::null(),
-                index,
+                index: NonOptIndex::new(1), // Cmd is the first noa
                 callback: CallbackType::Null,
                 default_value: OptValue::null(),
             }
@@ -239,10 +236,7 @@ pub mod cmd {
     opt_type_def!(
         CmdNonOpt, 
         current_type(),
-        false,
-        false,
-        style,
-        Style::Cmd
+        { style, Style::Cmd }
     );
 
     opt_callback_def!(
@@ -273,11 +267,23 @@ pub mod cmd {
 
     opt_alias_def!( CmdNonOpt );
 
-    opt_index_def!(
-        CmdNonOpt,
-        index,
-        index,
-    );
+    impl Index for CmdNonOpt {
+        fn index(&self) -> &NonOptIndex {
+            &self.index
+        }
+
+        /// Can not change the index of [`Cmd`]
+        fn set_index(&mut self, _: NonOptIndex) {
+            
+        }
+
+        fn match_index(&self, total: i64, current: i64) -> bool {
+            if let Some(realindex) = self.index().calc_index(total) {
+                return realindex == current;
+            }
+            false
+        }
+    }
 
     /// Pos using value hold the return value of callback
     impl Value for CmdNonOpt {
@@ -333,8 +339,194 @@ pub mod cmd {
             let opt = Box::new(CmdNonOpt::new(
                 id,
                 ci.get_name().to_owned(),
+            ));
+
+            Ok(opt)
+        }
+
+        fn gen_info(&self, opt: &dyn Opt) -> Box<dyn Info> {
+            Box::new(OptionInfo::new(opt.id()))
+        }
+    }
+}
+
+pub mod main {
+    use super::*;
+    use crate::opt::*;
+    use crate::id::Identifier as IIdentifier;
+
+    pub fn current_type() -> &'static str {
+        "main"
+    }
+
+    pub trait Main: NonOpt { }
+
+    #[derive(Debug)]
+    pub struct MainNonOpt {
+        id: IIdentifier,
+
+        name: String,
+
+        optional: bool,
+
+        value: OptValue,
+
+        index: NonOptIndex,
+
+        callback: CallbackType,
+
+        default_value: OptValue,
+    }
+
+    impl MainNonOpt {
+        pub fn new(id: IIdentifier, name: String, optional: bool) -> Self {
+            Self {
+                id,
+                name,
+                optional,
+                value: OptValue::null(),
+                index: NonOptIndex::null(), // Cmd is the first noa
+                callback: CallbackType::Null,
+                default_value: OptValue::null(),
+            }
+        }
+    }
+
+    opt_def!(MainNonOpt, Main, NonOpt);
+
+    opt_type_def!(
+        MainNonOpt, 
+        current_type(),
+        false,
+        { style, Style::Main }
+    );
+
+    opt_callback_def!(
+        MainNonOpt,
+        callback,
+        callback,
+        CallbackType::Main,
+        CallbackType::Null,
+    );
+
+    opt_identifier_def!(
+        MainNonOpt,
+        id,
+        para,
+    );
+
+    impl Name for MainNonOpt {
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        fn prefix(&self) -> &str {
+            ""
+        }
+
+        fn set_name(&mut self, name_para: &str) {
+            self.name = name_para.to_owned()
+        }
+
+        fn set_prefix(&mut self, _: &str) {
+            
+        }
+
+        fn match_name(&self, _: &str) -> bool {
+            true
+        }
+
+        fn match_prefix(&self, prefix_para: &str) -> bool {
+            self.prefix() == prefix_para
+        }
+    }
+
+    impl Optional for MainNonOpt {
+        fn optional(&self) -> bool {
+            self.optional
+        }
+
+        fn set_optional(&mut self, _: bool) {
+            
+        }
+
+        fn match_optional(&self, optional_para: bool) -> bool {
+            self.optional() == optional_para
+        }
+    }
+
+    opt_alias_def!( MainNonOpt );
+
+    impl Index for MainNonOpt {
+        fn index(&self) -> &NonOptIndex {
+            &self.index
+        }
+
+        /// Can not change the index of [`Main`]
+        fn set_index(&mut self, _: NonOptIndex) {
+            
+        }
+
+        fn match_index(&self, _: i64, _: i64) -> bool {
+            true
+        }
+    }
+
+    /// Pos using value hold the return value of callback
+    impl Value for MainNonOpt {
+        fn value(&self) -> &OptValue {
+            &self.value
+        }
+
+        fn default_value(&self) -> &OptValue {
+            &self.default_value
+        }
+
+        fn set_value(&mut self, value_para: OptValue) {
+            self.value = value_para;
+        }
+
+        // ignore set default value operate
+        fn set_default_value(&mut self, _: OptValue) {
+
+        }
+
+        fn parse_value(&self, _: &str) -> Result<OptValue> {
+            return Ok(OptValue::from_bool(true));
+        }
+
+        fn has_value(&self) -> bool {
+            self.value().is_bool()
+        }
+
+        fn reset_value(&mut self) {
+            self.set_value(self.default_value().clone());
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct MainUtils;
+
+    impl MainUtils {
+        pub fn new() -> Self {
+            Self {}
+        }
+    }
+
+    impl Utils for MainUtils {
+        fn type_name(&self) -> &str {
+            current_type()
+        }
+
+        fn is_support_deactivate_style(&self) -> bool {
+            false
+        }
+
+        fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            let opt = Box::new(MainNonOpt::new(
+                id,
+                ci.get_name().to_owned(),
                 ci.is_optional(),
-                ci.get_index().clone(),
             ));
 
             Ok(opt)

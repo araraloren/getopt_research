@@ -85,7 +85,7 @@ impl OptContext {
 impl Context for OptContext {
     fn match_opt(&self, opt: &dyn Opt) -> bool {
         let matched = 
-            opt.match_style(self.style.clone()) &&
+            opt.is_style(self.style.clone()) &&
             ((opt.match_name(self.opt_name.as_str()) && opt.match_prefix(self.opt_prefix.as_str()))
                 || opt.match_alias(&self.opt_prefix, &self.opt_name));
         debug!("Match Opt<{:?}> {:?} => ", opt.id(), opt);
@@ -98,7 +98,7 @@ impl Context for OptContext {
         
         debug!("Match successed => {:?} : Opt<{:?}>", self, opt.id());
         self.matched = true;
-        if opt.is_need_argument() && self.next_argument.is_none() {
+        if opt.is_style(Style::Argument) && self.next_argument.is_none() {
             return Err(Error::ArgumentRequired(format!("{}{}", opt.prefix(), opt.name())));
         }
         if let Some(v) = &self.next_argument {
@@ -167,7 +167,7 @@ impl NonOptContext {
 impl Context for NonOptContext {
     fn match_opt(&self, opt: &dyn Opt) -> bool {
         let matched = 
-            opt.match_style(self.style.clone()) && 
+            opt.is_style(self.style.clone()) && 
             opt.match_index(self.total, self.current) &&
             opt.match_name(&self.opt_name);
 
@@ -179,7 +179,8 @@ impl Context for NonOptContext {
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> { 
         debug!("Match successed => {:?} : Opt<{:?}>", self, opt.id());
         self.matched = true;
-        // opt_name will be ignored
+        // opt_name will be ignored, 
+        // try to set value even if the value will be set in another side
         opt.set_value(opt.parse_value(&self.opt_name)?);
         opt.set_need_invoke(true);
         Ok(true)

@@ -68,7 +68,7 @@ pub enum OptValue {
 /// For example, given command line arguments like `["rem", "-c", 5, "--force", "lucy"]`
 /// After parser process the option `-c` and `--force`, 
 /// the left argument is non-option arguments `rem@1` and `lucy@2`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NonOptIndex {
     Forward(i64),
 
@@ -90,6 +90,10 @@ impl NonOptIndex {
         else {
             Self::AnyWhere
         }
+    }
+
+    pub fn null() -> Self {
+        Self::Null
     }
 
     pub fn calc_index(&self, total: i64) -> Option<i64> {
@@ -146,7 +150,6 @@ impl Info for OptionInfo {
     }
 }
 
-
 /// Type hold specify information of an option type
 pub trait Type: Any {
     /// Unique type name of current option type
@@ -156,11 +159,8 @@ pub trait Type: Any {
     /// user can set(disable) them by using "-/o"
     fn is_deactivate_style(&self) -> bool;
 
-    /// Is the option need argument
-    fn is_need_argument(&self) -> bool;
-
     /// Retrun true if the option compatible with the style
-    fn match_style(&self, style: Style) -> bool;
+    fn is_style(&self, style: Style) -> bool;
 
     /// Check if everything is fine
     fn check(&self) -> Result<bool>;
@@ -670,7 +670,7 @@ macro_rules! opt_identifier_def {
 ///     alias: Vec<String>,
 /// }
 /// 
-/// // `opt_type_def!(StrOpt, current_type(), true, false, style_para, Style::Argument)` will expand to 
+/// // `opt_type_def!(StrOpt, current_type(), false, { style, Style::Argument })` will expand to 
 /// 
 /// impl Type for StrOpt {
 ///     fn type_name(&self) -> &str {
@@ -681,11 +681,7 @@ macro_rules! opt_identifier_def {
 ///         false
 ///     }
 ///
-///     fn is_need_argument(&self) -> bool {
-///         true
-///     }
-///
-///     fn match_style(&self, style_para: Style) -> bool {
+///     fn is_style(&self, style_para: Style) -> bool {
 ///         match style_para {
 ///             Style::Argument => true,
 ///             _ => false
@@ -693,9 +689,10 @@ macro_rules! opt_identifier_def {
 ///     }
 /// 
 ///     fn check(&self) -> Result<bool> {
-///         if self.is_need_argument() {
-///            return Err(Error::OptionForceRequired(self.name.to_owned()));
-///         }
+///         // comment this for compile error
+///         // if (!self.optional()) && (!self.has_value()) {
+///         //    return Err(Error::OptionForceRequired(self.name.to_owned()));
+///         // }
 ///         Ok(true)
 ///     }
 /// }
@@ -705,10 +702,10 @@ macro_rules! opt_identifier_def {
 macro_rules! opt_type_def {
     ($opt:ty,
      $type_name:expr,
-     $need_argument:expr,
-     false,
-     $style_var:ident,
-     $($style_pattern:pat),+
+     {
+        $style_var:ident,
+        $($style_pattern:pat),+
+     }
     ) => (
         impl Type for $opt {
             fn type_name(&self) -> &str {
@@ -719,22 +716,18 @@ macro_rules! opt_type_def {
                 false
             }
 
-            fn is_need_argument(&self) -> bool {
-                $need_argument
-            }
-
-            fn match_style(&self, $style_var: Style) -> bool {
+            fn is_style(&self, $style_var: Style) -> bool {
                 match $style_var {
                     $(
                         $style_pattern => true,
                     )+
-                    _ => false,
+                    _ => false
                 }
             }
 
             fn check(&self) -> Result<bool> {
-                if self.is_need_argument() {
-                    return Err(Error::OptionForceRequired(self.name().to_owned()));
+                if (!self.optional()) && (!self.has_value()) {
+                    return Err(Error::OptionForceRequired(format!("{}{}", self.prefix(), self.name())));
                 }
                 Ok(true)
             }
@@ -743,10 +736,11 @@ macro_rules! opt_type_def {
 
     ($opt:ty,
      $type_name:expr,
-     $need_argument:expr,
-     $deactivate:ident,
-     $style_var:ident,
-     $($style_pattern:pat),+
+     false,
+     {
+        $style_var:ident,
+        $($style_pattern:pat),+
+     }
     ) => (
         impl Type for $opt {
             fn type_name(&self) -> &str {
@@ -754,23 +748,56 @@ macro_rules! opt_type_def {
             }
 
             fn is_deactivate_style(&self) -> bool {
-                self.$deactivate
+                false
             }
 
-            fn is_need_argument(&self) -> bool {
-                $need_argument
-            }
-
-            fn match_style(&self, $style_var: Style) -> bool {
+            fn is_style(&self, $style_var: Style) -> bool {
                 match $style_var {
-                    $($style_pattern => true,)+
+                    $(
+                        $style_pattern => true,
+                    )+
                     _ => false
                 }
             }
 
             fn check(&self) -> Result<bool> {
-                if self.is_need_argument() {
-                    return Err(Error::OptionForceRequired(self.name().to_owned()));
+                if (!self.optional()) && (!self.has_value()) {
+                    return Err(Error::OptionForceRequired(format!("{}{}", self.prefix(), self.name())));
+                }
+                Ok(true)
+            }
+        }
+    );
+
+    ($opt:ty,
+     $type_name:expr,
+     $deactivate_member:ident,
+     {
+        $style_var:ident,
+        $($style_pattern:pat),+
+     }
+    ) => (
+        impl Type for $opt {
+            fn type_name(&self) -> &str {
+                $type_name
+            }
+
+            fn is_deactivate_style(&self) -> bool {
+                self.$deactivate_member
+            }
+
+            fn is_style(&self, $style_var: Style) -> bool {
+                match $style_var {
+                    $(
+                        $style_pattern => true,
+                    )+
+                    _ => false
+                }
+            }
+
+            fn check(&self) -> Result<bool> {
+                if (!self.optional()) && (!self.has_value()) {
+                    return Err(Error::OptionForceRequired(format!("{}{}", self.prefix(), self.name())));
                 }
                 Ok(true)
             }
@@ -784,6 +811,7 @@ macro_rules! opt_type_def {
 /// ```no_run
 /// use getopt_rs::opt::*;
 /// use getopt_rs::id;
+/// use getopt_rs::callback::*;
 /// 
 /// #[derive(Debug)]
 /// pub struct StrOpt {
@@ -802,9 +830,9 @@ macro_rules! opt_type_def {
 ///     callback: CallbackType,
 /// }
 /// 
-/// // `opt_callback_def!(StrOpt, callback, callback_para, Callback::Value, Callback::Null)` will expand to 
+/// // `opt_callback_def!(StrOpt, callback, callback_para, CallbackType::Value, CallbackType::Null)` will expand to 
 /// 
-/// impl Callback for $opt {
+/// impl Callback for StrOpt {
 ///     fn callback_type(&self) -> CallbackType {
 ///         self.callback.clone()
 ///     }
@@ -815,10 +843,10 @@ macro_rules! opt_type_def {
 ///
 ///     fn set_need_invoke(&mut self, callback_para: bool) {
 ///         if callback_para {
-///             self.callback = Callback::Value;
+///             self.callback = CallbackType::Value;
 ///         }
 ///         else {
-///             self.callback = Callback::Null;
+///             self.callback = CallbackType::Null;
 ///         }
 ///     }
 /// }
@@ -1282,10 +1310,8 @@ pub mod str {
     opt_type_def!(
         StrOpt, 
         current_type(),
-        true,
         false,
-        style,
-        Style::Argument
+        { style, Style::Argument }
     );
 
     opt_callback_def!(
@@ -1451,11 +1477,8 @@ pub mod bool {
     opt_type_def!(
         BoolOpt, 
         current_type(),
-        false,
         deactivate_style,
-        style,
-        Style::Boolean,
-        Style::Multiple
+        { style, Style::Boolean, Style::Multiple }
     );
 
     opt_callback_def!(
@@ -1630,10 +1653,8 @@ pub mod arr {
     opt_type_def!(
         ArrOpt, 
         current_type(),
-        true,
         false,
-        style,
-        Style::Argument
+        { style, Style::Argument }
     );
 
     opt_callback_def!(
@@ -1806,10 +1827,8 @@ pub mod int {
     opt_type_def!(
         IntOpt, 
         current_type(),
-        true,
         false,
-        style,
-        Style::Argument
+        { style, Style::Argument }
     );
 
     opt_callback_def!(
@@ -1972,10 +1991,8 @@ pub mod uint {
     opt_type_def!(
         UintOpt, 
         current_type(),
-        true,
         false,
-        style,
-        Style::Argument
+        { style, Style::Argument }
     );
 
     opt_callback_def!(
@@ -2138,10 +2155,8 @@ pub mod flt {
     opt_type_def!(
         FltOpt, 
         current_type(),
-        true,
         false,
-        style,
-        Style::Argument
+        { style, Style::Argument }
     );
 
     opt_callback_def!(
@@ -2305,10 +2320,8 @@ pub mod example {
     opt_type_def!(
         PathOpt, 
         current_type(),
-        true,
         false,
-        style,
-        Style::Argument
+        { style, Style::Argument }
     );
 
     opt_callback_def!(

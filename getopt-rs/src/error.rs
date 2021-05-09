@@ -33,4 +33,7 @@ pub enum Error {
 
     #[error("option `{0}` is force required")]
     OptionForceRequired(String),
+
+    #[error("need non-option: `{0}`")]
+    NonOptionForceRequired(String),
 }
