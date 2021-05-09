@@ -4,15 +4,22 @@ use crate::proc::SequenceProc;
 use crate::proc::Publisher;
 use crate::proc::Info;
 use crate::set::Set;
+use crate::opt::Opt;
 use crate::opt::Style;
+use crate::opt::OptValue;
+use crate::callback::OptCallback;
+use crate::callback::CallbackType;
 use crate::id::IdGenerator;
+use crate::id::Identifier;
 use crate::ctx::Context;
 use crate::ctx::OptContext;
+use crate::ctx::NonOptContext;
 use crate::arg::Iterator as CIterator;
 use crate::arg::Argument;
 use crate::error::Result;
 
 use std::fmt::Debug;
+use std::collections::HashMap;
 
 pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
     fn parse(&mut self, iter: &mut dyn CIterator) -> Result<Option<ReturnValue>>;
@@ -21,7 +28,13 @@ pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
 
     fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>);
 
+    fn set_callback(&mut self, id: Identifier, callback: OptCallback);
+
     fn set(&self) -> &Option<Box<dyn Set>>;
+
+    fn get_opt(&self, id: Identifier) -> Option<& dyn Opt>;
+
+    fn get_opt_mut(&mut self, id: Identifier) -> Option<&mut dyn Opt>;
 
     fn noa(&self) -> &Vec<String>;
 
@@ -57,6 +70,8 @@ pub struct ForwardParser {
     set: Option<Box<dyn Set>>,
 
     argument_matched: bool,
+
+    callbacks: HashMap<Identifier, OptCallback>,
 }
 
 impl ForwardParser {
@@ -68,6 +83,7 @@ impl ForwardParser {
             noa: vec![],
             set: None,
             argument_matched: false,
+            callbacks: HashMap::new(),
         }
     }
 
@@ -81,17 +97,14 @@ impl Parser for ForwardParser {
         if self.set.is_none() {
             return Ok(None);
         }
-
         iter.set_prefix(self.set.as_ref().unwrap().get_all_prefixs());
-
+        debug!("---- In Parser, start process option");
         while ! iter.reach_end() {
             let mut matched = false;
 
             iter.fill_current_and_next();
             self.argument_matched = false;
-
             debug!("**** ArgIterator [{:?}, {:?}]", iter.current(), iter.next());
-
             if let Ok(arg) = iter.parse() {
 
                 debug!("parse ... {:?}", arg);
@@ -104,7 +117,6 @@ impl Parser for ForwardParser {
                         matched = self.publish(cp)?;
                     }
                 }
-
                 if ! matched {
                     let multiple_ctx = generate_multiple_style(&arg, &None);
 
@@ -118,7 +130,6 @@ impl Parser for ForwardParser {
                         matched = self.publish(cp)?;
                     }
                 }
-
                 if ! matched {
                     if let Some(ctx) = generate_boolean_style(&arg, &None) {
                         let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
@@ -133,8 +144,28 @@ impl Parser for ForwardParser {
             if matched && self.argument_matched {
                 iter.skip();
             }
+            if !matched {
+                if let Some(arg) = iter.current() {
+                    self.noa.push(arg.clone());
+                }
+            }
 
             iter.skip();
+        }
+
+        let noa_total = self.noa().len();
+
+        // process cmd and pos
+        if noa_total > 0 {
+            debug!("---- In Parser, start process pos");
+            for index in 1 ..= noa_total {
+                if let Some(ctx) = generate_nonoption_style(&self.noa()[index - 1], noa_total as i64, index as i64) {
+                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+                    cp.append_ctx(ctx);
+                    self.publish(cp)?;
+                }
+            }
         }
 
         Ok(Some(ReturnValue::new(&self.noa, self.set.as_ref().unwrap().as_ref())))
@@ -144,12 +175,24 @@ impl Parser for ForwardParser {
         self.msg_id_gen = id_generator;
     }
 
+    fn set_callback(&mut self, id: Identifier, callback: OptCallback) {
+        self.callbacks.insert(id, callback);
+    }
+
     fn publish_to(&mut self, set: Box<dyn Set>) {
         self.set = Some(set);
     }
 
     fn set(&self) -> &Option<Box<dyn Set>> {
         &self.set
+    }
+
+    fn get_opt(&self, id: Identifier) -> Option<& dyn Opt> {
+        self.set.as_ref().unwrap().get_opt(id)
+    }
+
+    fn get_opt_mut(&mut self, id: Identifier) -> Option<&mut dyn Opt> {
+        self.set.as_mut().unwrap().get_opt_mut(id)
     }
 
     fn noa(&self) -> &Vec<String> {
@@ -172,13 +215,42 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
 
         for index in 0 .. self.cached_infos.len() {
             let info = self.cached_infos.get_mut(index).unwrap();
+            let opt = self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap(); // id always exist, so just unwrap
+            let res = proc.process(opt)?;
+            let need_invoke = opt.is_need_invoke();
+            let callback_type = opt.callback_type();
 
-            proc.process(self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap())?;
-        }
+            if res {
+                if need_invoke {
+                    opt.set_need_invoke(false);
+                    if let Some(callback) = self.callbacks.get_mut(&opt.id()) {
+                        debug!("!!!! Calling callback of {:?}", info.id());
+                        match callback_type {
+                            CallbackType::Value => {
+                                callback.call_value(opt)?;
+                            }
+                            CallbackType::Index => {
+                                let length = self.noa.len();
+                                let index = opt.index().calc_index(length as i64);
 
-        if proc.is_matched() {
-            if proc.is_need_argument() {
-                self.set_argument_matched();
+                                if let Some(index) = index {
+                                    let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize])?;
+                                    // can we fix this long call?
+                                    self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap().set_value(OptValue::from_bool(ret));
+                                }
+                            }
+                            CallbackType::Main => {
+                                let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa)?;
+                                // can we fix this long call?
+                                self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap().set_value(OptValue::from_bool(ret));
+                            }
+                            _ => { }
+                        }
+                    }
+                }
+                if proc.is_need_argument() {
+                    self.set_argument_matched();
+                }
             }
         }
 
@@ -249,4 +321,8 @@ pub fn generate_boolean_style(arg: &Argument, _:  &Option<String>) -> Option<Box
             )))
         }
     }    
+}
+
+pub fn generate_nonoption_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
+    Some(Box::new(NonOptContext::new( noa.clone(), Style::Pos, total, current )))
 }
