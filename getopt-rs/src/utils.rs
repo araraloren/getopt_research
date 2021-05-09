@@ -422,7 +422,7 @@ fn parse_opt_string(s: &str) -> Result<ParseResult> {
     }
     // if we have a `@`
     if let Some(index) = right_info.rfind(INDEX) {
-        match right_info.split_at(index + 1).1.parse::<i32>() {
+        match right_info.split_at(index + 1).1.parse::<i64>() {
             Ok(v) => {
                 opt_index = NonOptIndex::new(v);
             }
