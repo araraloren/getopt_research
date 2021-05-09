@@ -3,6 +3,7 @@ use getopt_rs::arg::Iterator;
 use getopt_rs::callback::OptCallback;
 use getopt_rs::callback::SimpleIndexCallback;
 use getopt_rs::callback::SimpleValueCallback;
+use getopt_rs::callback::SimpleMainCallback;
 use getopt_rs::id::DefaultIdGen;
 use getopt_rs::id::Identifier;
 use getopt_rs::nonopt;
@@ -41,6 +42,8 @@ fn main() {
         .unwrap();
     set.add_utils(Box::new(nonopt::pos::PosUtils::new()))
         .unwrap();
+    set.add_utils(Box::new(nonopt::cmd::CmdUtils::new())).unwrap();
+    set.add_utils(Box::new(nonopt::main::MainUtils::new())).unwrap();
 
     if let Ok(mut commit) = set.add_opt("-|q=str") {
         commit.add_alias("--", "query");
@@ -85,7 +88,33 @@ fn main() {
             id,
             OptCallback::from_index(Box::new(SimpleIndexCallback::new(
                 |set: &dyn Set, arg: &String| {
-                    println!("Meeting {:?} and {:?}", arg, set);
+                    println!("In pos Meeting {:?}", arg);
+                    Ok(true)
+                },
+            ))),
+        )
+    }
+
+    if let Ok(mut commit) = set.add_opt("mysql=cmd") {
+        let id = commit.commit().unwrap();
+        parser.set_callback(
+            id,
+            OptCallback::from_main(Box::new(SimpleMainCallback::new(
+                |set: &dyn Set, args: &Vec<String>| {
+                    println!("In cmd Meeting {:?}", args);
+                    Ok(true)
+                },
+            ))),
+        )
+    }
+
+    if let Ok(mut commit) = set.add_opt("main=main") {
+        let id = commit.commit().unwrap();
+        parser.set_callback(
+            id,
+            OptCallback::from_main(Box::new(SimpleMainCallback::new(
+                |set: &dyn Set, args: &Vec<String>| {
+                    println!("In main Meeting {:?} ", args);
                     Ok(true)
                 },
             ))),
@@ -99,7 +128,7 @@ fn main() {
 
     ai.set_args(
         &mut [
-            "let",
+            "mysql",
             "--query",
             "bar",
             "--force",
