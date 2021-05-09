@@ -1,7 +1,8 @@
 
 use std::fmt::Debug;
-
 use std::any::Any;
+
+use crate::callback::CallbackType;
 use crate::id::Identifier as IIdentifier;
 use crate::utils::Utils;
 use crate::utils::CreateInfo;
@@ -23,8 +24,14 @@ pub enum Style {
     /// "-abcd" means "-a", "-b", "-c", "-d"
     Multiple,
 
-    /// Not a option style
-    NonOption,
+    /// NonOption style
+    Pos,
+
+    /// NonOption style
+    Cmd,
+
+    /// NonOption style
+    Main,
 
     Null,
 }
@@ -63,13 +70,59 @@ pub enum OptValue {
 /// the left argument is non-option arguments `rem@1` and `lucy@2`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NonOptIndex {
-    Forward(u64),
+    Forward(i64),
 
-    Backward(u64),
+    Backward(i64),
 
     AnyWhere,
 
     Null
+}
+
+impl NonOptIndex {
+    pub fn new(index: i64) -> Self {
+        if index > 0 {
+            Self::Forward(index)
+        }
+        else if index < 0 {
+            Self::Backward(index)
+        }
+        else {
+            Self::AnyWhere
+        }
+    }
+
+    pub fn calc_index(&self, total: i64) -> Option<i64> {
+        match self {
+            NonOptIndex::Forward(offset) => {
+                if offset <= &total {
+                    return Some(*offset)
+                }
+            }
+            NonOptIndex::Backward(offset) => {
+                let realindex = total + *offset;
+                
+                if realindex > 0 {
+                    return Some(realindex);
+                }
+            }
+            _ => { }
+        }
+        None
+    }
+
+    pub fn is_null(&self) -> bool {
+        match self {
+            Self::Null => true,
+            _ => false,
+        }
+    }
+}
+
+impl Default for NonOptIndex {
+    fn default() -> Self {
+        Self::Null
+    }
 }
 
 /// Currently `OptionInfo` only hold a option identifier.
@@ -94,9 +147,9 @@ impl Info for OptionInfo {
 }
 
 
-/// Type hold specify information for an option type
+/// Type hold specify information of an option type
 pub trait Type: Any {
-    /// Unique type name for current option type
+    /// Unique type name of current option type
     fn type_name(&self) -> &str;
 
     /// Boolean option that initialized with true,
@@ -114,11 +167,22 @@ pub trait Type: Any {
 }
 
 pub trait Identifier {
-    /// Get an unique identifier for current option
+    /// Get an unique identifier of current option
     fn id(&self) -> IIdentifier;
 
     /// Set identifier to `id`
     fn set_id(&mut self, id: IIdentifier);
+}
+
+pub trait Callback {
+    /// Get callback type of current option
+    fn callback_type(&self) -> CallbackType;
+
+    /// Return true if the callback need invoke
+    fn is_need_invoke(&self) -> bool;
+
+    /// Set invoke flag
+    fn set_need_invoke(&mut self, invoke: bool);
 }
 
 pub trait Name {
@@ -196,10 +260,10 @@ pub trait Index {
 
     fn set_index(&mut self, index: NonOptIndex);
 
-    fn match_index(&self, total: u64, current: u64) -> bool;
+    fn match_index(&self, total: i64, current: i64) -> bool;
 }
 
-pub trait Opt: Type + Identifier + Name + Alias + Optional + Value + Index + Debug { }
+pub trait Opt: Type + Identifier + Name + Alias + Optional + Value + Index + Callback + Debug { }
 
 /// Helper function clone the any value
 pub struct CloneHelper(Box< dyn Fn (&dyn Any) -> Box<dyn Any>>);
@@ -207,7 +271,7 @@ pub struct CloneHelper(Box< dyn Fn (&dyn Any) -> Box<dyn Any>>);
 impl Debug for CloneHelper {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AnyCloneHelper")
-         .field("option", &String::from("..."))
+         .field("Fn", &String::from("..."))
          .finish()
     }
 }
@@ -517,38 +581,13 @@ impl Default for OptValue {
     }
 }
 
-impl NonOptIndex {
-    pub fn new(index: i32) -> Self {
-        if index > 0 {
-            Self::Forward(index as u64)
-        }
-        else if index < 0 {
-            Self::Backward((-index) as u64)
-        }
-        else {
-            Self::AnyWhere
-        }
-    }
-
-    pub fn is_null(&self) -> bool {
-        match self {
-            Self::Null => true,
-            _ => false,
-        }
-    }
-}
-
-impl Default for NonOptIndex {
-    fn default() -> Self {
-        Self::Null
-    }
-}
-
 
 #[macro_export]
 macro_rules! opt_def {
-    ($opt:ty, $trait:ident) => (
-        impl $trait for $opt { }
+    ($opt:ty, $($trait:ident),+) => (
+        $(
+            impl $trait for $opt { }
+        )+
 
         impl Opt for $opt { }
     )
@@ -669,7 +708,7 @@ macro_rules! opt_type_def {
      $need_argument:expr,
      false,
      $style_var:ident,
-     $($style_pattern:pat,)+
+     $($style_pattern:pat),+
     ) => (
         impl Type for $opt {
             fn type_name(&self) -> &str {
@@ -707,7 +746,7 @@ macro_rules! opt_type_def {
      $need_argument:expr,
      $deactivate:ident,
      $style_var:ident,
-     $($style_pattern:pat,)+
+     $($style_pattern:pat),+
     ) => (
         impl Type for $opt {
             fn type_name(&self) -> &str {
@@ -737,6 +776,80 @@ macro_rules! opt_type_def {
             }
         }
     );
+}
+
+/// Create a `Callback` implementation for type `$opt`.
+/// 
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// use getopt_rs::id;
+/// 
+/// #[derive(Debug)]
+/// pub struct StrOpt {
+///     id: id::Identifier,
+///
+///     name: String,
+///
+///     prefix: String,
+///
+///     optional: bool,
+///
+///     value: OptValue,
+///
+///     alias: Vec<String>,
+/// 
+///     callback: CallbackType,
+/// }
+/// 
+/// // `opt_callback_def!(StrOpt, callback, callback_para, Callback::Value, Callback::Null)` will expand to 
+/// 
+/// impl Callback for $opt {
+///     fn callback_type(&self) -> CallbackType {
+///         self.callback.clone()
+///     }
+///
+///     fn is_need_invoke(&self) -> bool {
+///         ! self.callback.is_null()
+///     }
+///
+///     fn set_need_invoke(&mut self, callback_para: bool) {
+///         if callback_para {
+///             self.callback = Callback::Value;
+///         }
+///         else {
+///             self.callback = Callback::Null;
+///         }
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! opt_callback_def {
+    ($opt:ty,
+     $callback:ident,
+     $callback_para:ident,
+     $callback_true_value:expr,
+     $callback_false_value:expr,
+    ) => (
+        impl Callback for $opt {
+            fn callback_type(&self) -> CallbackType {
+                self.$callback.clone()
+            }
+
+            fn is_need_invoke(&self) -> bool {
+                ! self.$callback.is_null()
+            }
+
+            fn set_need_invoke(&mut self, $callback_para: bool) {
+                if $callback_para {
+                    self.$callback = $callback_true_value;
+                }
+                else {
+                    self.$callback = $callback_false_value;
+                }
+            }
+        }
+    )
 }
 
 /// Create a `Name` implementation for type `$opt`.
@@ -792,6 +905,37 @@ macro_rules! opt_type_def {
 #[macro_export]
 macro_rules! opt_name_def {
     ($opt:ty,
+     $name:ident,
+     $name_para:ident,
+    ) => (
+        impl Name for $opt {
+            fn name(&self) -> &str {
+                &self.$name
+            }
+
+            fn prefix(&self) -> &str {
+                ""
+            }
+
+            fn set_name(&mut self, $name_para: &str) {
+                self.$name = $name_para.to_owned()
+            }
+
+            fn set_prefix(&mut self, _: &str) {
+                
+            }
+
+            fn match_name(&self, $name_para: &str) -> bool {
+                self.name() == $name_para
+            }
+
+            fn match_prefix(&self, prefix_para: &str) -> bool {
+                self.prefix() == prefix_para
+            }
+        }
+    );
+
+    ($opt:ty,
      $prefix:ident,
      $name:ident,
      $prefix_para:ident,
@@ -822,7 +966,7 @@ macro_rules! opt_name_def {
                 self.prefix() == $prefix_para
             }
         }
-    )
+    );
 }
 
 /// Create a `Optional` implementation for type `$opt`.
@@ -1027,7 +1171,7 @@ macro_rules! opt_alias_def {
 ///         self.index = index_para
 ///     }
 ///
-///     fn match_index(&self, total: u64, current: u64) -> bool {
+///     fn match_index(&self, total: i64, current: i64) -> bool {
 ///         match self.index() {
 ///             NonOptIndex::Forward(offset) => {
 ///                 if offset <= &total {
@@ -1060,7 +1204,7 @@ macro_rules! opt_index_def {
 
             fn set_index(&mut self, _: NonOptIndex) { }
 
-            fn match_index(&self, _: u64, _: u64) -> bool {
+            fn match_index(&self, _: i64, _: i64) -> bool {
                 true /* option can be set in anywhere */
             }
         }
@@ -1079,24 +1223,9 @@ macro_rules! opt_index_def {
                 self.$index = $index_para
             }
 
-            fn match_index(&self, total: u64, current: u64) -> bool {
-                match self.index() {
-                    NonOptIndex::Forward(offset) => {
-                        if offset <= total {
-                            return offset == current;
-                        }
-                    }
-                    NonOptIndex::Backward(offset) => {
-                        let realindex = total - offset;
-                        
-                        if realindex > 0 {
-                            return realindex == current;
-                        }
-                    }
-                    NonOptIndex::AnyWhere => {
-                        return true;
-                    }
-                    _ => { }
+            fn match_index(&self, total: i64, current: i64) -> bool {
+                if let Some(realindex) = self.index().calc_index(total) {
+                    return realindex == current;
                 }
                 false
             }
@@ -1129,6 +1258,8 @@ pub mod str {
         default_value: OptValue,
 
         alias: Vec<(String, String)>,
+
+        callback: CallbackType,
     }
 
     impl StrOpt {
@@ -1141,6 +1272,7 @@ pub mod str {
                 value: default_value.clone_or(&None),
                 default_value,
                 alias: vec![],
+                callback: CallbackType::Null,
             }
         }
     }
@@ -1153,7 +1285,15 @@ pub mod str {
         true,
         false,
         style,
-        Style::Argument,
+        Style::Argument
+    );
+
+    opt_callback_def!(
+        StrOpt,
+        callback,
+        callback,
+        CallbackType::Value,
+        CallbackType::Null,
     );
 
     opt_identifier_def!(
@@ -1286,6 +1426,8 @@ pub mod bool {
         deactivate_style: bool,
 
         alias: Vec<(String, String)>,
+
+        callback: CallbackType,
     }
 
     impl BoolOpt {
@@ -1299,6 +1441,7 @@ pub mod bool {
                 default_value,
                 deactivate_style,
                 alias: vec![],
+                callback: CallbackType::Null,
             }
         }
     }
@@ -1312,7 +1455,15 @@ pub mod bool {
         deactivate_style,
         style,
         Style::Boolean,
-        Style::Multiple,
+        Style::Multiple
+    );
+
+    opt_callback_def!(
+        BoolOpt,
+        callback,
+        callback,
+        CallbackType::Value,
+        CallbackType::Null,
     );
 
     opt_identifier_def!(
@@ -1455,6 +1606,8 @@ pub mod arr {
         default_value: OptValue,
 
         alias: Vec<(String, String)>,
+
+        callback: CallbackType,
     }
 
     impl ArrOpt {
@@ -1467,6 +1620,7 @@ pub mod arr {
                 value: default_value.clone_or(&None),
                 default_value,
                 alias: vec![],
+                callback: CallbackType::Null,
             }
         }
     }
@@ -1479,7 +1633,15 @@ pub mod arr {
         true,
         false,
         style,
-        Style::Argument,
+        Style::Argument
+    );
+
+    opt_callback_def!(
+        ArrOpt,
+        callback,
+        callback,
+        CallbackType::Value,
+        CallbackType::Null,
     );
 
     opt_identifier_def!(
@@ -1620,6 +1782,8 @@ pub mod int {
         default_value: OptValue,
 
         alias: Vec<(String, String)>,
+
+        callback: CallbackType,
     }
 
     impl IntOpt {
@@ -1632,6 +1796,7 @@ pub mod int {
                 value: default_value.clone_or(&None),
                 default_value,
                 alias: vec![],
+                callback: CallbackType::Null,
             }
         }
     }
@@ -1644,7 +1809,15 @@ pub mod int {
         true,
         false,
         style,
-        Style::Argument,
+        Style::Argument
+    );
+
+    opt_callback_def!(
+        IntOpt,
+        callback,
+        callback,
+        CallbackType::Value,
+        CallbackType::Null,
     );
 
     opt_identifier_def!(
@@ -1775,6 +1948,8 @@ pub mod uint {
         default_value: OptValue,
 
         alias: Vec<(String, String)>,
+
+        callback: CallbackType,
     }
 
     impl UintOpt {
@@ -1787,6 +1962,7 @@ pub mod uint {
                 value: default_value.clone_or(&None),
                 default_value,
                 alias: vec![],
+                callback: CallbackType::Null,
             }
         }
     }
@@ -1799,7 +1975,15 @@ pub mod uint {
         true,
         false,
         style,
-        Style::Argument,
+        Style::Argument
+    );
+
+    opt_callback_def!(
+        UintOpt,
+        callback,
+        callback,
+        CallbackType::Value,
+        CallbackType::Null,
     );
 
     opt_identifier_def!(
@@ -1930,6 +2114,8 @@ pub mod flt {
         default_value: OptValue,
 
         alias: Vec<(String, String)>,
+
+        callback: CallbackType,
     }
 
     impl FltOpt {
@@ -1942,6 +2128,7 @@ pub mod flt {
                 value: default_value.clone_or(&None),
                 default_value,
                 alias: vec![],
+                callback: CallbackType::Null,
             }
         }
     }
@@ -1954,7 +2141,15 @@ pub mod flt {
         true,
         false,
         style,
-        Style::Argument,
+        Style::Argument
+    );
+
+    opt_callback_def!(
+        FltOpt,
+        callback,
+        callback,
+        CallbackType::Value,
+        CallbackType::Null,
     );
 
     opt_identifier_def!(
@@ -2086,6 +2281,8 @@ pub mod example {
         default_value: OptValue,
 
         alias: Vec<(String, String)>,
+
+        callback: CallbackType,
     }
 
     impl PathOpt {
@@ -2098,6 +2295,7 @@ pub mod example {
                 value: default_value.clone_or(&None),
                 default_value,
                 alias: vec![],
+                callback: CallbackType::Null,
             }
         }
     }
@@ -2110,7 +2308,15 @@ pub mod example {
         true,
         false,
         style,
-        Style::Argument,
+        Style::Argument
+    );
+
+    opt_callback_def!(
+        PathOpt,
+        callback,
+        callback,
+        CallbackType::Value,
+        CallbackType::Null,
     );
 
     opt_identifier_def!(
