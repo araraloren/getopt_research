@@ -1,8 +1,9 @@
 
+use std::hash::Hash;
 use std::fmt::Debug;
 use std::ops::Add;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Hash)]
 pub struct Identifier(u64);
 
 impl Identifier {
