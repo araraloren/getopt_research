@@ -79,6 +79,7 @@ impl Proc for SequenceProc {
 
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
         if self.is_matched() {
+            debug!("Skip process {:?}, it matched", self.id());
             return Ok(true);
         }
 
