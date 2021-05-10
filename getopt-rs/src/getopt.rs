@@ -1,25 +1,34 @@
 
 use crate::set::Set;
 use crate::parser::Parser;
-use crate::arg::Iterator;
+use crate::parser::ReturnValue;
+use crate::arg::IndexIterator;
 use crate::error::Result;
 
-#[derive(Debug)]
-pub struct Getopt {
-    parsers: Vec<Box<dyn Parser>>,
+use std::iter::Iterator;
 
-    arg_iter: Box<dyn Iterator>,
+#[derive(Debug)]
+pub struct Getopt<'a, T> where T: IndexIterator {
+    parser: Vec<Box<dyn Parser>>,
+
+    preparser: Option<Box<dyn Parser>>,
+
+    arg_iter: T,
+
+    return_value: Vec<ReturnValue<'a>>,
 }
 
-impl Getopt {
-    pub fn new(iter: Box<dyn Iterator>) -> Self {
+impl<'a, T> Getopt<'a, T> where T: IndexIterator {
+    pub fn new(iter: T) -> Self {
         Self {
-            parsers: vec![],
+            parser: vec![],
+            preparser: None,
             arg_iter: iter,
+            return_value: vec![],
         }
     }
 
-    pub fn initialized(&mut self, iter: &mut dyn std::iter::Iterator<Item=String>) -> &mut Self {
+    pub fn initialized(&mut self, iter: &mut dyn Iterator<Item=String>) -> &mut Self {
         self.arg_iter.set_args(iter);
         self
     }
@@ -28,9 +37,15 @@ impl Getopt {
         self.initialized(&mut std::env::args())
     }
 
+    pub fn set_preparser(&mut self, set: Box<dyn Set>, mut parser: Box<dyn Parser>) -> &mut Self {
+        parser.publish_to(set);
+        self.preparser = Some(parser);
+        self
+    }
+
     pub fn app_subscriber(&mut self, set: Box<dyn Set>, mut parser: Box<dyn Parser>) -> &mut Self {
         parser.publish_to(set);
-        self.parsers.push(parser);
+        self.parser.push(parser);
         self
     }
 
@@ -39,7 +54,7 @@ impl Getopt {
     }
 
     pub fn reset(&mut self) {
-        self.parsers.iter_mut().for_each(|s|s.reset());
+        self.parser.iter_mut().for_each(|s|s.reset());
         self.arg_iter.reset();
     }
 }

@@ -14,7 +14,7 @@ use crate::id::Identifier;
 use crate::ctx::Context;
 use crate::ctx::OptContext;
 use crate::ctx::NonOptContext;
-use crate::arg::Iterator as CIterator;
+use crate::arg::IndexIterator;
 use crate::arg::Argument;
 use crate::error::Result;
 use crate::error::Error;
@@ -23,7 +23,7 @@ use std::fmt::Debug;
 use std::collections::HashMap;
 
 pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
-    fn parse(&mut self, iter: &mut dyn CIterator) -> Result<Option<ReturnValue>>;
+    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<ReturnValue>>;
 
     fn publish_to(&mut self, set: Box<dyn Set>);
 
@@ -100,7 +100,7 @@ impl ForwardParser {
 }
 
 impl Parser for ForwardParser {
-    fn parse(&mut self, iter: &mut dyn CIterator) -> Result<Option<ReturnValue>> {
+    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<ReturnValue>> {
         if self.set.is_none() {
             return Ok(None);
         }
@@ -120,7 +120,7 @@ impl Parser for ForwardParser {
                 debug!("parse ... {:?}", arg);
 
                 if ! matched {
-                    if let Some(ctx) = generate_argument_style(&arg, iter.next()) {
+                    if let Some(ctx) = parser_gen_argument_style(&arg, iter.next()) {
                         let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                         cp.append_ctx(ctx);
@@ -128,7 +128,7 @@ impl Parser for ForwardParser {
                     }
                 }
                 if ! matched {
-                    let multiple_ctx = generate_multiple_style(&arg, &None);
+                    let multiple_ctx = parser_gen_multiple_style(&arg, &None);
 
                     if multiple_ctx.len() > 0 {
                         let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
@@ -141,7 +141,7 @@ impl Parser for ForwardParser {
                     }
                 }
                 if ! matched {
-                    if let Some(ctx) = generate_boolean_style(&arg, &None) {
+                    if let Some(ctx) = parser_gen_boolean_style(&arg, &None) {
                         let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                         cp.append_ctx(ctx);
@@ -170,7 +170,7 @@ impl Parser for ForwardParser {
         // process cmd and pos
         if noa_total > 0 {
             debug!("---- In ForwardParser, start process cmd");
-            if let Some(ctx) = generate_cmd_style(&self.noa()[0], noa_total as i64, 1) {
+            if let Some(ctx) = parser_gen_cmd_style(&self.noa()[0], noa_total as i64, 1) {
                 let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                 cp.append_ctx(ctx);
@@ -179,7 +179,7 @@ impl Parser for ForwardParser {
 
             debug!("---- In ForwardParser, start process pos");
             for index in 1 ..= noa_total {
-                if let Some(ctx) = generate_pos_style(&self.noa()[index - 1], noa_total as i64, index as i64) {
+                if let Some(ctx) = parser_gen_pos_style(&self.noa()[index - 1], noa_total as i64, index as i64) {
                     let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                     cp.append_ctx(ctx);
@@ -191,7 +191,7 @@ impl Parser for ForwardParser {
         self.check_nonopt()?;
 
         debug!("---- In ForwardParser, start process main");
-        if let Some(ctx) = generate_main_style(&String::new(), 0, 0) {
+        if let Some(ctx) = parser_gen_main_style(&String::new(), 0, 0) {
             let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
             cp.append_ctx(ctx);
@@ -232,89 +232,11 @@ impl Parser for ForwardParser {
     }
 
     fn check_opt(&self) -> Result<bool> {
-        for opt in self.set.as_ref().unwrap().iter() {
-            if opt.as_ref().is_style(Style::Boolean) && opt.as_ref().is_style(Style::Argument) 
-                && opt.as_ref().is_style(Style::Multiple) {
-                opt.check()?;
-            }
-        }
-        Ok(true)
+        parser_default_opt_check(self.set.as_ref().unwrap().as_ref())
     }
 
     fn check_nonopt(&self) -> Result<bool> {
-        let len = i64::MAX;
-        let mut index_map: HashMap<i64, Vec<Identifier>> = HashMap::new();
-
-        for opt in self.set.as_ref().unwrap().iter() {
-            if opt.as_ref().is_style(Style::Pos) && opt.as_ref().is_style(Style::Cmd) 
-                && opt.as_ref().is_style(Style::Main) {
-                let entry = index_map
-                    .entry(opt.as_ref().index().calc_index(len).unwrap())
-                    .or_insert(vec![]);
-
-                entry.push(opt.as_ref().id());
-            } 
-        }
-        let mut force_names= vec![];
-
-        for item in index_map.iter() {
-            let mut valid = false;
-
-            // first pos is a special position
-            if item.0 == &1 {
-                let mut cmd_count = 0;
-                let mut cmd_valid = false;
-                let mut pos_valid = false;
-                let mut force_valid = false;        
-
-                for id in item.1.iter() {
-                    let opt = self.get_opt(*id).unwrap();
-                    
-                    if opt.is_style(Style::Cmd) {
-                        cmd_count += 1;
-                        cmd_valid = cmd_valid || opt.check().unwrap_or(false);
-                    }
-                    else if opt.is_style(Style::Pos) {
-                        let valid = opt.check().unwrap_or(false);
-
-                        pos_valid = pos_valid || valid;
-                        if valid {
-                            force_valid = force_valid || opt.has_value();
-                        }
-                    }
-                    force_names.push(format!("`{}{}`", opt.prefix(), opt.name()));
-                }
-
-                if cmd_count > 0 {
-                    if item.1.len() > cmd_count {
-                        valid = cmd_valid || force_valid;
-                    } 
-                    else {
-                        valid = cmd_valid;
-                    }
-                } 
-                else {
-                    valid = pos_valid;
-                }
-
-                if !valid {
-                    return Err(Error::NonOptionForceRequired(force_names.join(" or ")));
-                }
-            }
-            else {
-                for id in item.1.iter() {
-                    let opt = self.get_opt(*id).unwrap();
-                    
-                    valid = valid || opt.check().unwrap_or(false);
-                    force_names.push(format!("`{}{}`", opt.prefix(), opt.name()));
-                }
-                if !valid {
-                    return Err(Error::NonOptionForceRequired(force_names.join(" or ")));
-                }
-            }
-            force_names.clear();
-        }        
-        Ok(true)
+        parser_default_nonopt_check(self.set.as_ref().unwrap().as_ref())
     }
 
     fn check_other(&self) -> Result<bool> {
@@ -388,7 +310,7 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
     }
 }
 
-pub fn generate_argument_style(arg: &Argument, next_argument: &Option<String>) -> Option<Box<dyn Context>> {
+pub fn parser_gen_argument_style(arg: &Argument, next_argument: &Option<String>) -> Option<Box<dyn Context>> {
     match arg.get_value() {
         Some(value) => {
             Some(Box::new(OptContext::new(
@@ -411,7 +333,7 @@ pub fn generate_argument_style(arg: &Argument, next_argument: &Option<String>) -
     }
 }
 
-pub fn generate_multiple_style(arg: &Argument, _: &Option<String>) -> Vec<Box<dyn Context>> {
+pub fn parser_gen_multiple_style(arg: &Argument, _: &Option<String>) -> Vec<Box<dyn Context>> {
     let mut ret: Vec<Box<dyn Context>> = vec![];
 
     if arg.get_value().is_none() {
@@ -430,7 +352,7 @@ pub fn generate_multiple_style(arg: &Argument, _: &Option<String>) -> Vec<Box<dy
     ret
 }
 
-pub fn generate_boolean_style(arg: &Argument, _:  &Option<String>) -> Option<Box<dyn Context>> {
+pub fn parser_gen_boolean_style(arg: &Argument, _:  &Option<String>) -> Option<Box<dyn Context>> {
     match arg.get_value() {
         Some(_) => None,
         None => {
@@ -445,14 +367,105 @@ pub fn generate_boolean_style(arg: &Argument, _:  &Option<String>) -> Option<Box
     }    
 }
 
-pub fn generate_pos_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
+pub fn parser_gen_pos_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
     Some(Box::new(NonOptContext::new( noa.clone(), Style::Pos, total, current )))
 }
 
-pub fn generate_cmd_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
+pub fn parser_gen_cmd_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
     Some(Box::new(NonOptContext::new( noa.clone(), Style::Cmd, total, current )))
 }
 
-pub fn generate_main_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
+pub fn parser_gen_main_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
     Some(Box::new(NonOptContext::new( noa.clone(), Style::Main, total, current )))
+}
+
+/// This function will call function [`check`](crate::opt::Type::check)
+/// of options which type is [`Style::Boolean`], [`Style::Argument`]
+/// or [`Style::Multiple`]
+pub fn parser_default_opt_check(set: &dyn Set) -> Result<bool> {
+        for opt in set.iter() {
+            if opt.as_ref().is_style(Style::Boolean) 
+            && opt.as_ref().is_style(Style::Argument) 
+            && opt.as_ref().is_style(Style::Multiple) {
+                opt.check()?;
+            }
+        }
+        Ok(true)
+}
+
+
+pub fn parser_default_nonopt_check(set: &dyn Set) -> Result<bool> {
+    let len = i64::MAX;
+    let mut index_map: HashMap<i64, Vec<Identifier>> = HashMap::new();
+
+    for opt in set.iter() {
+        if opt.as_ref().is_style(Style::Pos) && opt.as_ref().is_style(Style::Cmd) 
+            && opt.as_ref().is_style(Style::Main) {
+            let entry = index_map
+                .entry(opt.as_ref().index().calc_index(len).unwrap())
+                .or_insert(vec![]);
+
+            entry.push(opt.as_ref().id());
+        } 
+    }
+    let mut force_names= vec![];
+
+    for item in index_map.iter() {
+        let mut valid = false;
+
+        // first pos is a special position
+        if item.0 == &1 {
+            let mut cmd_count = 0;
+            let mut cmd_valid = false;
+            let mut pos_valid = false;
+            let mut force_valid = false;        
+
+            for id in item.1.iter() {
+                let opt = set.get_opt(*id).unwrap();
+                
+                if opt.is_style(Style::Cmd) {
+                    cmd_count += 1;
+                    cmd_valid = cmd_valid || opt.check().unwrap_or(false);
+                }
+                else if opt.is_style(Style::Pos) {
+                    let valid = opt.check().unwrap_or(false);
+
+                    pos_valid = pos_valid || valid;
+                    if valid {
+                        force_valid = force_valid || opt.has_value();
+                    }
+                }
+                force_names.push(format!("`{}{}`", opt.prefix(), opt.name()));
+            }
+
+            if cmd_count > 0 {
+                if item.1.len() > cmd_count {
+                    valid = cmd_valid || force_valid;
+                } 
+                else {
+                    valid = cmd_valid;
+                }
+            } 
+            else {
+                valid = pos_valid;
+            }
+
+            if !valid {
+                return Err(Error::NonOptionForceRequired(force_names.join(" or ")));
+            }
+        }
+        else {
+            for id in item.1.iter() {
+                let opt = set.get_opt(*id).unwrap();
+                
+                valid = valid || opt.check().unwrap_or(false);
+                force_names.push(format!("`{}{}`", opt.prefix(), opt.name()));
+            }
+            if !valid {
+                return Err(Error::NonOptionForceRequired(force_names.join(" or ")));
+            }
+        }
+        force_names.clear();
+    }        
+    Ok(true)
 }
