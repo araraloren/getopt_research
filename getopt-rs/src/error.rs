@@ -22,8 +22,8 @@ pub enum Error {
     #[error("option name can not be null")]
     NullOptionName,
 
-    #[error("given option type not support deactivate style")]
-    NotSupportDeactivateStyle,
+    #[error("utils `{0}` not support deactivate style")]
+    UtilsNotSupportDeactivateStyle(String),
 
     #[error("the given type is exists: `{0}`")]
     DuplicateOptionType(String),

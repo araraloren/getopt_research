@@ -43,14 +43,14 @@ impl Add<u64> for Identifier {
 }
 
 pub trait IdGenerator: Debug {
-    /// Get next identifier
+    /// Get next [`Identifier`]
     fn next_id(&mut self) -> Identifier;
 
     /// Set the identifier to `id`
     fn reset(&mut self, id: Identifier);
 }
 
-/// Default identifier generator, not thread safe
+/// Default [`Identifier`] generator, not thread safe
 #[derive(Debug, Default)]
 pub struct DefaultIdGen {
     id: Identifier
@@ -73,5 +73,25 @@ impl IdGenerator for DefaultIdGen {
 
     fn reset(&mut self, id: Identifier) {
         self.id = id;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_id_generate() {
+        let mut gen = DefaultIdGen::new(Identifier::new(1));
+
+        assert_eq!(gen.next_id(), Identifier::new(1));
+        assert_eq!(gen.next_id(), Identifier::new(2));
+        assert_eq!(gen.next_id(), Identifier::new(3));
+
+        let mut id = gen.next_id();
+
+        assert_eq!(id.get(), 4);
+        assert_eq!(id.inc().get(), 5);
     }
 }

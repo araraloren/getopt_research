@@ -63,8 +63,8 @@ pub enum OptValue {
 }
 
 ///
-/// `NonOptionIndex` is the index of non-option arguments.
-/// It is base on one.
+/// [`NonOptionIndex`] is the index of non-option arguments.
+/// It is base on one, zero is means [`NonOptIndex::AnyWhere`].
 /// For example, given command line arguments like `["rem", "-c", 5, "--force", "lucy"]`
 /// After parser process the option `-c` and `--force`, 
 /// the left argument is non-option arguments `rem@1` and `lucy@2`.
@@ -1400,6 +1400,14 @@ pub mod str {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+
             let mut opt = Box::new(StrOpt::new(
                 id,
                 ci.get_name().to_owned(),
@@ -1578,6 +1586,14 @@ pub mod bool {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+
             let mut opt = Box::new(BoolOpt::new(
                 id,
                 ci.get_name().to_owned(),
@@ -1753,6 +1769,14 @@ pub mod arr {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+
             let mut opt = Box::new(ArrOpt::new(
                 id,
                 ci.get_name().to_owned(),
@@ -1917,6 +1941,14 @@ pub mod int {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+
             let mut opt = Box::new(IntOpt::new(
                 id,
                 ci.get_name().to_owned(),
@@ -2081,6 +2113,14 @@ pub mod uint {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+
             let mut opt = Box::new(UintOpt::new(
                 id,
                 ci.get_name().to_owned(),
@@ -2244,7 +2284,15 @@ pub mod flt {
             false
         }
 
-        fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+        fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+
+
             let mut opt = Box::new(FltOpt::new(
                 id,
                 ci.get_name().to_owned(),
@@ -2415,6 +2463,14 @@ pub mod example {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+            
             let clone_helper: CloneHelper = CloneHelper(Box::new(
                 |pathbuf: & dyn std::any::Any| {
                     Box::new(pathbuf.downcast_ref::<PathBuf>().unwrap().clone())
@@ -2442,6 +2498,180 @@ pub mod example {
 
         fn gen_info(&self, opt: &dyn Opt) -> Box<dyn Info> {
             Box::new(OptionInfo::new(opt.id()))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn make_opt_type_int_work() {
+        let int_utils = int::IntUtils::new();
+        
+        assert_eq!(int_utils.type_name(), int::current_type());
+        assert_eq!(int_utils.is_support_deactivate_style(), false);
+        
+        let mut ci = CreateInfo::parse("--|opt=int!").unwrap();
+        let mut opt = int_utils.create(IIdentifier::new(42), &ci).unwrap();
+    }
+
+    #[test]
+    fn make_optvalue_work() {
+        make_optvalue_int_work();
+        make_optvalue_uint_work();
+        make_optvalue_str_work();
+        make_optvalue_null_work();
+        make_optvalue_flt_work();
+        make_optvalue_bool_work();
+        make_optvalue_arr_work();
+        make_optvalue_any_work();
+    }
+
+    fn make_optvalue_int_work() {
+        let mut value = OptValue::from_int(25);
+
+        assert!(value.is_int());
+        assert_eq!(value.as_int(), Some(&25));
+        assert_eq!(value.as_int_mut(), Some(&mut 25));
+
+        let test_cases = &[ value.is_uint(), value.is_str(), value.is_null(),
+                                      value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+
+        for r in test_cases {
+            assert!(! r);
+        }
+
+        let test_cases = &[ value.as_uint().is_none(), value.as_str().is_none(), value.as_bool_or_null().is_none(),
+                                      value.as_flt().is_none(), value.as_bool().is_none(), value.as_arr().is_none(), value.as_any().is_none() ];
+
+        for r in test_cases {
+            assert!(r);
+        }
+
+        let mut value = OptValue::from_int(-25);
+
+        assert!(value.is_int());
+        assert_eq!(value.as_int(), Some(&-25));
+        assert_eq!(value.as_int_mut(), Some(&mut -25));
+
+        let test_cases = &[ value.is_uint(), value.is_str(), value.is_null(),
+                                      value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+
+        for r in test_cases {
+            assert!(! r);
+        }
+
+        let test_cases = &[ value.as_uint().is_none(), value.as_str().is_none(), value.as_bool_or_null().is_none(),
+                                      value.as_flt().is_none(), value.as_bool().is_none(), value.as_arr().is_none(), value.as_any().is_none() ];
+
+        for r in test_cases {
+            assert!(r);
+        }
+    }
+
+    fn make_optvalue_uint_work() {
+        let mut value = OptValue::from_uint(33u64);
+
+        assert!(value.is_uint());
+        assert_eq!(value.as_uint(), Some(&33));
+        assert_eq!(value.as_uint_mut(), Some(&mut 33));
+
+        let test_cases = &[ value.is_int(), value.is_str(), value.is_null(), value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+
+        for r in test_cases {
+            assert!(! r);
+        }
+    }
+
+    fn make_optvalue_str_work() {
+        let mut value = OptValue::from_str("value");
+
+        assert!(value.is_str());
+        assert_eq!(value.as_str(), Some(&String::from("value")));
+        assert_eq!(value.as_str_mut(), Some(&mut String::from("value")));
+
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+
+        for r in test_cases {
+            assert!(! r);
+        }
+    }
+
+    fn make_optvalue_null_work() {
+        let value = OptValue::null();
+
+        assert!(value.is_null());
+        assert_eq!(value.as_bool_or_null(), Some(&false));
+
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_str(), value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+
+        for r in test_cases {
+            assert!(! r);
+        }
+    }
+
+    fn make_optvalue_flt_work() {
+        let mut value = OptValue::from_flt(1.7);
+
+        assert!(value.is_flt());
+        assert_eq!(value.as_flt(), Some(&1.7));
+        assert_eq!(value.as_flt_mut(), Some(&mut 1.7));
+
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_str(), value.is_bool(), value.is_arr(), value.is_any() ];
+
+        for r in test_cases {
+            assert!(! r);
+        }
+    }
+
+    fn make_optvalue_bool_work() {
+        let mut value = OptValue::from_bool(true);
+
+        assert!(value.is_bool());
+        assert_eq!(value.as_bool(), Some(&true));
+        assert_eq!(value.as_bool_mut(), Some(&mut true));
+        assert_eq!(value.as_bool_or_null(), Some(&true));
+
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_flt(), value.is_str(), value.is_arr(), value.is_any() ];
+
+        for r in test_cases {
+            assert!(! r);
+        }
+    }
+
+    fn make_optvalue_arr_work() {
+        let mut data: Vec<String> = ["v1", "v2", "v3", "v4"].iter().map(|&v| { String::from(v)}).collect();
+        let mut value = OptValue::from_arr(data.clone());
+
+        assert!(value.is_arr());
+        assert_eq!(value.as_arr(), Some(&data));
+        assert_eq!(value.as_arr_mut(), Some(&mut data));
+
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_str(), value.is_bool(), value.is_str(), value.is_any() ];
+
+        for r in test_cases {
+            assert!(! r);
+        }
+    }
+
+    fn make_optvalue_any_work() {
+        #[derive(Debug, Clone, PartialEq)]
+        struct InnerData(i64);
+
+        let mut data = Box::new(InnerData(42));
+        let mut value = OptValue::from_any(data.clone());
+
+        assert!(value.is_any());
+        assert_eq!(value.as_any().unwrap().as_ref().downcast_ref::<InnerData>(), Some(data.as_ref()));
+        assert_eq!(value.as_any_mut().unwrap().as_mut().downcast_mut::<InnerData>(), Some(data.as_mut()));
+
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_str(), value.is_bool(), value.is_arr(), value.is_str() ];
+
+        for r in test_cases {
+            assert!(! r);
         }
     }
 }

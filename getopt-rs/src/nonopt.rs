@@ -173,6 +173,14 @@ pub mod pos {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+            
             let opt = Box::new(PosNonOpt::new(
                 id,
                 ci.get_name().to_owned(),
@@ -336,6 +344,14 @@ pub mod cmd {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+
             let opt = Box::new(CmdNonOpt::new(
                 id,
                 ci.get_name().to_owned(),
@@ -523,6 +539,14 @@ pub mod main {
         }
 
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
+            if ci.is_deactivate_style() {
+                if ! self.is_support_deactivate_style() {
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                }
+            }
+            
+            assert_eq!(ci.get_type_name(), self.type_name());
+
             let opt = Box::new(MainNonOpt::new(
                 id,
                 ci.get_name().to_owned(),
