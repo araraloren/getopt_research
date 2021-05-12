@@ -62,8 +62,9 @@ pub enum OptValue {
     Null,
 }
 
+
+/// The index of non-option arguments.
 ///
-/// [`NonOptionIndex`] is the index of non-option arguments.
 /// It is base on one, zero is means [`NonOptIndex::AnyWhere`].
 /// For example, given command line arguments like `["rem", "-c", 5, "--force", "lucy"]`
 /// After parser process the option `-c` and `--force`, 
@@ -150,7 +151,38 @@ impl Info for OptionInfo {
     }
 }
 
-/// Type hold specify information of an option type
+/// Some specify information of an option type.
+///
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// use getopt_rs::error::Result;
+/// 
+/// struct O;
+///
+/// impl Type for O {
+///     fn type_name(&self) -> &str {
+///         "o"
+///     }
+///
+///     fn is_deactivate_style(&self) -> bool { true }
+///
+///     fn is_style(&self, style: Style) -> bool {
+///         style == Style::Boolean
+///     }
+/// 
+///     fn check(&self) -> Result<bool> {
+///         Ok(true)
+///     }
+/// }
+///
+/// let opt = O;
+///
+/// assert_eq!(opt.type_name(), "o");
+/// assert_eq!(opt.is_deactivate_style(), true);
+/// assert_eq!(opt.is_style(Style::Boolean), true);
+///
+/// ```
 pub trait Type: Any {
     /// Unique type name of current option type
     fn type_name(&self) -> &str;
@@ -162,10 +194,35 @@ pub trait Type: Any {
     /// Retrun true if the option compatible with the style
     fn is_style(&self, style: Style) -> bool;
 
-    /// Check if everything is fine
+    /// Check if the option is valid after parsed
     fn check(&self) -> Result<bool>;
 }
 
+/// The unique identifier of an option.
+///
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// use getopt_rs::id::Identifier as IIdentifier;
+/// 
+/// struct O(pub IIdentifier);
+///
+/// impl Identifier for O {
+///     fn id(&self) -> IIdentifier {
+///         self.0.clone()
+///     }
+///
+///     fn set_id(&mut self, id: IIdentifier) {
+///         self.0 = id;
+///     }
+/// }
+///
+/// let mut opt = O(IIdentifier::new(42));
+///
+/// assert_eq!(opt.id(), IIdentifier::new(42));
+/// opt.set_id(IIdentifier::new(1));
+/// assert_eq!(opt.id(), IIdentifier::new(1));
+/// ```
 pub trait Identifier {
     /// Get an unique identifier of current option
     fn id(&self) -> IIdentifier;
@@ -174,9 +231,52 @@ pub trait Identifier {
     fn set_id(&mut self, id: IIdentifier);
 }
 
+/// The callback information of an option.
+///
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// use getopt_rs::callback::*;
+/// 
+/// struct O(pub CallbackType, pub bool);
+/// 
+/// impl Callback for O {
+///     fn callback_type(&self) -> CallbackType {
+///         self.0.clone()
+///     }
+///     
+///     fn set_callback_type(&mut self, callback_type: CallbackType) {
+///         self.0 = callback_type
+///     }
+/// 
+///     fn is_need_invoke(&self) -> bool {
+///         self.1
+///     }
+/// 
+///     fn set_need_invoke(&mut self, invoke: bool) {
+///         self.1 = invoke;
+///     }
+/// }
+/// 
+/// let mut opt = O(CallbackType::Value, false);
+/// 
+/// assert_eq!(opt.callback_type(), CallbackType::Value);
+/// assert_eq!(opt.is_need_invoke(), false);
+/// 
+/// // Something happend, such as option is set by user.
+/// opt.set_need_invoke(true);
+/// 
+/// // In other side, `Parser` will call the callback bind to current option `Identifier`.
+/// // And set the invoke flag to false.
+/// opt.set_need_invoke(false);
+///
+/// ```
 pub trait Callback {
     /// Get callback type of current option
     fn callback_type(&self) -> CallbackType;
+
+    /// Get callback type of current option
+    fn set_callback_type(&mut self, callback_type: CallbackType);
 
     /// Return true if the callback need invoke
     fn is_need_invoke(&self) -> bool;
@@ -836,6 +936,10 @@ macro_rules! opt_type_def {
 ///     fn callback_type(&self) -> CallbackType {
 ///         self.callback.clone()
 ///     }
+/// 
+///     fn set_callback_type(&mut self, callback_para: CallbackType) {
+///         self.callback = callback_para;
+///     }
 ///
 ///     fn is_need_invoke(&self) -> bool {
 ///         ! self.callback.is_null()
@@ -862,6 +966,10 @@ macro_rules! opt_callback_def {
         impl Callback for $opt {
             fn callback_type(&self) -> CallbackType {
                 self.$callback.clone()
+            }
+
+            fn set_callback_type(&mut self, $callback_para: CallbackType) {
+                self.$callback = $callback_para;
             }
 
             fn is_need_invoke(&self) -> bool {
@@ -2515,7 +2623,22 @@ mod tests {
         assert_eq!(int_utils.is_support_deactivate_style(), false);
         
         let mut ci = CreateInfo::parse("--|opt=int!").unwrap();
-        let mut opt = int_utils.create(IIdentifier::new(42), &ci).unwrap();
+        let mut opt = int_utils.create(IIdentifier::new(1), &ci).unwrap();
+
+        assert_eq!(opt.type_name(), "int");
+        assert_eq!(opt.is_deactivate_style(), false);
+        assert_eq!(opt.is_style(Style::Argument), true);
+        assert_eq!(opt.check().is_err(), true);
+
+        assert_eq!(opt.id().get(), 1);
+        opt.set_id(IIdentifier::new(42));
+        assert_eq!(opt.id().get(), 42);
+
+        assert_eq!(opt.callback_type(), CallbackType::Null);
+        assert_eq!(opt.is_need_invoke(), false);
+        opt.set_need_invoke(true);
+        assert_eq!(opt.callback_type(), CallbackType::Value);
+        assert_eq!(opt.is_need_invoke(), true);
     }
 
     #[test]

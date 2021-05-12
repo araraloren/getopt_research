@@ -70,7 +70,7 @@ pub mod pos {
     opt_callback_def!(
         PosNonOpt,
         callback,
-        callback,
+        callback_type,
         CallbackType::Index,
         CallbackType::Null,
     );

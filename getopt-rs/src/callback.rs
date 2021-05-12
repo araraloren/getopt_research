@@ -77,7 +77,7 @@ impl OptCallback {
 
 /// [`CallbackType`] is using for [`Opt`] identify which type [`OptCallback`] need 
 /// to be call when the [`Opt`] matched
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CallbackType {
     /// Identify the callback type [`OptCallback::Value`]
     Value,
@@ -119,6 +119,12 @@ impl CallbackType {
             Self::Null=> true,
             _ => false,
         }
+    }
+}
+
+impl Default for CallbackType {
+    fn default() -> Self {
+        Self::Null
     }
 }
 

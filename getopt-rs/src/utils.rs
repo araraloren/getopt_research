@@ -1,7 +1,7 @@
 
 use std::fmt::Debug;
 
-use crate::opt::Opt;
+use crate::{callback::CallbackType, opt::Opt};
 use crate::opt::NonOptIndex;
 use crate::opt::OptValue;
 use crate::error::Error;
@@ -36,6 +36,8 @@ pub struct CreateInfo {
     opt_alias: Vec<(String, String)>,
 
     opt_value: OptValue,
+
+    opt_callback_type: CallbackType,
 }
 
 impl CreateInfo {
@@ -47,6 +49,7 @@ impl CreateInfo {
         deactivate_style: bool,
         optional: bool,
         deafult_value: OptValue,
+        opt_callback_type: CallbackType,
     ) -> Self {
         Self {
             type_name: type_name.to_owned(),
@@ -54,9 +57,10 @@ impl CreateInfo {
             opt_prefix: prefix.to_owned(),
             opt_index: index,
             deactivate: deactivate_style,
-            optional: optional,
+            optional,
             opt_alias: vec![],
             opt_value: deafult_value,
+            opt_callback_type,
         }
     }
 
@@ -72,7 +76,8 @@ impl CreateInfo {
             deactivate: pr.deactivate.unwrap_or(false),
             optional: pr.optional.unwrap_or(true),
             opt_alias: vec![],
-            opt_value: OptValue::Null,
+            opt_value: OptValue::default(),
+            opt_callback_type: CallbackType::default(),
         })
     }
 
@@ -128,6 +133,10 @@ impl CreateInfo {
         &self.opt_value
     }
 
+    pub fn get_callback_type(&self) -> &CallbackType {
+        &self.opt_callback_type
+    }
+
     pub fn set_deactivate_style(&mut self, deactivate: bool) {
         self.deactivate = deactivate;
     }
@@ -154,6 +163,10 @@ impl CreateInfo {
 
     pub fn set_deafult_value(&mut self, value: OptValue) {
         self.opt_value = value;
+    }
+
+    pub fn set_callback_type(&mut self, callback_type: CallbackType) {
+        self.opt_callback_type = callback_type;
     }
 
     pub fn add_alias(&mut self, prefix: &str, name: &str) {
