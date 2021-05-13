@@ -10,32 +10,46 @@ use crate::proc::Info;
 use crate::error::Error;
 use crate::error::Result;
 
+/// The option style type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Style {
-    /// Boolean style is the option looks like
-    /// "-o", "--option", "-option"
+    /// Boolean style is the option such as "-o", "--option", "-option", "-/a", etc.
+    /// It not need argument, and support deactivate style.
+    /// The option type [`BoolOpt`](crate::opt::bool::BoolOpt) support current style.
     Boolean,
 
-    /// Argument style is the option looks like
-    /// "-o 1", "-o=1", "--option=1", "-option=1"
+    /// Argument style is the option such as "-o 1", "-o=1", "--option=1", "-option=1", etc.
+    /// It need an argument, and not support deactivate style.
+    /// The option type [`IntOpt`](crate::opt::int::IntOpt), [`StrOpt`](crate::opt::str::StrOpt),
+    /// etc. support current style.
     Argument,
 
-    /// Multiple style are some option looks like
-    /// "-abcd" means "-a", "-b", "-c", "-d"
+    /// Multiple style are some option such as "-abcd".
+    /// It means Boolean style option "-a", "-b", "-c" and "-d", etc.
+    /// All the Boolean style option will support this style.
     Multiple,
 
-    /// NonOption style
+    /// NonOption style.
+    /// Non-option type [`PosNonOpt`](crate::nonopt::pos::PosNonOpt) support current style.
     Pos,
 
-    /// NonOption style
+    /// NonOption style.
+    /// Non-option type [`CmdNonOpt`](crate::nonopt::cmd::CmdNonOpt) support current style.
     Cmd,
 
-    /// NonOption style
+    /// NonOption style.
+    /// Non-option type [`MainNonOpt`](crate::nonopt::main::MainNonOpt) support current style.
     Main,
 
     Null,
 }
 
+/// The option value type.
+/// 
+/// It support `i64`, `u64`, `String` and `Vec<String>`, etc.
+/// Even it support a `Box<dyn Any>` for any type implemented [`Any`](std::any::Any).
+/// [`OptValue`](crate::opt::OptValue) implement [`Clone`] for any type expect `Box<dyn Any>`.
+/// You need provide a [`CloneHelper`] when your option type target a `Box<dyn Any>` value.
 #[derive(Debug)]
 pub enum OptValue {
     /// Signed integer value
@@ -81,6 +95,9 @@ pub enum NonOptIndex {
 }
 
 impl NonOptIndex {
+    /// Return [`Self::Forward`] if index bigger than zero.
+    /// Return [`Self::Backward`] if index little than zero.
+    /// Otherwise return [`Self::AnyWhere`].
     pub fn new(index: i64) -> Self {
         if index > 0 {
             Self::Forward(index)
@@ -157,6 +174,7 @@ impl Info for OptionInfo {
 /// ```no_run
 /// use getopt_rs::opt::*;
 /// use getopt_rs::error::Result;
+/// use std::any::Any;
 /// 
 /// struct O;
 ///
@@ -174,6 +192,10 @@ impl Info for OptionInfo {
 ///     fn check(&self) -> Result<bool> {
 ///         Ok(true)
 ///     }
+/// 
+///     fn as_any(&self) -> &dyn Any {
+///         self
+///     }
 /// }
 ///
 /// let opt = O;
@@ -183,7 +205,7 @@ impl Info for OptionInfo {
 /// assert_eq!(opt.is_style(Style::Boolean), true);
 ///
 /// ```
-pub trait Type: Any {
+pub trait Type {
     /// Unique type name of current option type
     fn type_name(&self) -> &str;
 
@@ -196,6 +218,8 @@ pub trait Type: Any {
 
     /// Check if the option is valid after parsed
     fn check(&self) -> Result<bool>;
+
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// The unique identifier of an option.
@@ -285,6 +309,8 @@ pub trait Callback {
     fn set_need_invoke(&mut self, invoke: bool);
 }
 
+/// The name and prefix 
+/// 
 pub trait Name {
     /// Get the name of current option,
     /// it will return "a" for "-a"
@@ -633,6 +659,13 @@ impl OptValue {
         }
     }
 
+    pub fn is<T: Any>(&self) -> bool {
+        match self {
+            Self::Any(v) => v.as_ref().is::<T>(),
+            _ => false,
+        }
+    }
+
     pub fn clone_or(&self, clone_helper: &Option<CloneHelper>) -> OptValue {
         match self {
             Self::Any(av) => {
@@ -795,6 +828,10 @@ macro_rules! opt_identifier_def {
 ///         // }
 ///         Ok(true)
 ///     }
+/// 
+///     fn as_any(&self) -> &dyn Any {
+///         self
+///     }
 /// }
 /// ```
 /// The `$deactivate` parameter is false in default.
@@ -831,6 +868,10 @@ macro_rules! opt_type_def {
                 }
                 Ok(true)
             }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
         }
     );
 
@@ -866,6 +907,10 @@ macro_rules! opt_type_def {
                 }
                 Ok(true)
             }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
         }
     );
 
@@ -900,6 +945,10 @@ macro_rules! opt_type_def {
                     return Err(Error::OptionForceRequired(format!("{}{}", self.prefix(), self.name())));
                 }
                 Ok(true)
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
             }
         }
     );
@@ -2622,7 +2671,7 @@ mod tests {
         assert_eq!(int_utils.type_name(), int::current_type());
         assert_eq!(int_utils.is_support_deactivate_style(), false);
         
-        let mut ci = CreateInfo::parse("--|opt=int!").unwrap();
+        let ci = CreateInfo::parse("--|opt=int!").unwrap();
         let mut opt = int_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(opt.type_name(), "int");
@@ -2639,6 +2688,48 @@ mod tests {
         opt.set_need_invoke(true);
         assert_eq!(opt.callback_type(), CallbackType::Value);
         assert_eq!(opt.is_need_invoke(), true);
+
+        opt.add_alias("-", "c");
+        assert_eq!(opt.alias(), Some(&vec![(String::from("-"), String::from("c"))]));
+        assert_eq!(opt.match_alias("-", "c"), true);
+        assert_eq!(opt.rem_alias("-", "c"), true);
+        assert_eq!(opt.alias().as_ref().unwrap().len(), 0);
+
+        assert_eq!(opt.index(), &NonOptIndex::Null);
+        assert_eq!(opt.match_index(0, 0), true);
+        opt.set_index(NonOptIndex::Forward(3));
+        assert_eq!(opt.match_index(0, 0), true);
+
+        assert_eq!(opt.name(), "opt");
+        assert_eq!(opt.prefix(), "--");
+        assert_eq!(opt.match_name("opt"), true);
+        assert_eq!(opt.match_name("opv"), false);
+        assert_eq!(opt.match_prefix("--"), true);
+        assert_eq!(opt.match_prefix("-"), false);
+        opt.set_name("count");
+        opt.set_prefix("+");
+        assert_eq!(opt.match_name("count"), true);
+        assert_eq!(opt.match_name("opt"), false);
+        assert_eq!(opt.match_prefix("+"), true);
+        assert_eq!(opt.match_prefix("--"), false);
+
+        assert_eq!(opt.optional(), false);
+        assert_eq!(opt.match_optional(true), false);
+        opt.set_optional(true);
+        assert_eq!(opt.optional(), true);
+        assert_eq!(opt.match_optional(true), true);
+
+        assert_eq!(opt.value().is_null(), true);
+        assert_eq!(opt.default_value().is_null(), true);
+        assert_eq!(opt.has_value(), false);
+        opt.set_value(opt.parse_value("99").unwrap());
+        assert_eq!(opt.value().as_int(), Some(&99));
+        opt.set_default_value(OptValue::from_int(42));
+        assert_eq!(opt.default_value().as_int(), Some(&42));
+        opt.reset_value();
+        assert_eq!(opt.value().as_int(), Some(&42));
+
+        assert_eq!(opt.as_ref().as_any().is::<int::IntOpt>(), true);
     }
 
     #[test]
