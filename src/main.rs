@@ -1,5 +1,5 @@
 use getopt_rs::arg::ArgIterator;
-use getopt_rs::arg::Iterator;
+use getopt_rs::arg::IndexIterator;
 use getopt_rs::callback::OptCallback;
 use getopt_rs::callback::SimpleIndexCallback;
 use getopt_rs::callback::SimpleValueCallback;
