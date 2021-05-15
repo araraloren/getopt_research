@@ -4,7 +4,7 @@ use crate::opt::*;
 use crate::error::*;
 use crate::set::Set;
 
-/// Callback will be used by `option` type such as [`Bool`](opt::bool::Bool)
+/// Callback will be used by `option` type such as [`BoolOpt`](crate::opt::bool::BoolOpt)
 pub trait ValueCallback: Debug {
     fn call(&mut self, opt: &dyn Opt) -> Result<bool>;
 }

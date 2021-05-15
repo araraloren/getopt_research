@@ -165,29 +165,28 @@ pub fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argum
         Some(s) => {
             const SPLIT: &'static str = "=";
 
-            let mut p_prefix: Option<String>;
+            let p_prefix: Option<String>;
             let p_name: Option<String>;
             let mut p_value: Option<String> = None;
 
             for prefix in prefixs.iter() {
                 if s.starts_with(prefix) {
-                    p_prefix = Some(prefix.to_owned());
                     let (_, left_str) = s.split_at(prefix.len());
-                    let name_or_value: Vec<_> = left_str.split(SPLIT).collect();
 
-                    match name_or_value.len() {
-                        1 => {
-                            p_name = Some(left_str.to_owned());
-                        }
-                        2 => {
+                    if left_str.len() > 0 {
+                        p_prefix = Some(prefix.to_owned());
+                        let name_or_value: Vec<_> = left_str.splitn(2, SPLIT).collect();
+
+                        if name_or_value.len() > 1 {
                             p_name = Some(name_or_value[0].to_owned());
                             p_value = Some(name_or_value[1].to_owned());
                         }
-                        _ => {
-                            continue;
+                        else {
+                            p_name = Some(left_str.to_owned());
                         }
+
+                        return Ok(Argument::new(p_prefix, p_name, p_value));
                     }
-                    return Ok(Argument::new(p_prefix, p_name, p_value));
                 }
             }
             Err(Error::InvalidOptionStr(s.clone()))
@@ -200,7 +199,6 @@ pub fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argum
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
 
     #[test]
@@ -281,5 +279,33 @@ mod tests {
             iter.skip();
         }
         assert!(iter.reach_end());
+    }
+
+    #[test]
+    fn test_parse_argument() {
+        let prefixs: Vec<String> = ["--", "-", "+", "/"].iter().map(|&v|String::from(v)).collect();
+
+        let test_cases = [
+            ("--option", Some(("--", "option", None))),
+            ("--option=1", Some(("--", "option", Some("1".to_owned())))),
+            ("-o", Some(("-", "o", None))),
+            ("+o", Some(("+", "o", None))),
+            ("/o", Some(("/", "o", None))),
+            ("-", None),
+            ("-w=1=2", Some(("-", "w", Some("1=2".to_owned())))),
+        ];
+
+        for acase in &test_cases {
+            if let Ok(a) = parse_argument(&Some(acase.0.to_owned()), &prefixs) {
+                if let Some(atest) = &acase.1 {
+                    assert_eq!(atest.0, a.get_prefix().unwrap().as_str());
+                    assert_eq!(atest.1, a.get_name().unwrap().as_str());
+                    assert_eq!(atest.2.as_ref(), a.get_value());
+                }
+            }
+            else {
+                assert_eq!(acase.1, None);
+            }
+        }
     }
 }

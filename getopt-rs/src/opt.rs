@@ -68,7 +68,7 @@ pub enum OptValue {
     Bool(bool),
 
     /// An vector can hold multiple value
-    Arr(Vec<String>),
+    Array(Vec<String>),
 
     /// Any type
     Any(Box<dyn Any>),
@@ -80,7 +80,7 @@ pub enum OptValue {
 /// The index of non-option arguments.
 ///
 /// It is base on one, zero is means [`NonOptIndex::AnyWhere`].
-/// For example, given command line arguments like `["rem", "-c", 5, "--force", "lucy"]`
+/// For example, given command line arguments like `["rem", "-c", 5, "--force", "lucy"]`.
 /// After parser process the option `-c` and `--force`, 
 /// the left argument is non-option arguments `rem@1` and `lucy@2`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -103,7 +103,7 @@ impl NonOptIndex {
             Self::Forward(index)
         }
         else if index < 0 {
-            Self::Backward(index)
+            Self::Backward(-index)
         }
         else {
             Self::AnyWhere
@@ -117,16 +117,19 @@ impl NonOptIndex {
     pub fn calc_index(&self, total: i64) -> Option<i64> {
         match self {
             NonOptIndex::Forward(offset) => {
-                if offset <= &total {
+                if *offset <= total {
                     return Some(*offset)
                 }
             }
             NonOptIndex::Backward(offset) => {
-                let realindex = total + *offset;
+                let realindex = total - *offset + 1;
                 
                 if realindex > 0 {
                     return Some(realindex);
                 }
+            }
+            NonOptIndex::AnyWhere => {
+                return Some(0);
             }
             _ => { }
         }
@@ -168,7 +171,7 @@ impl Info for OptionInfo {
     }
 }
 
-/// Some specify information of an option type.
+/// Some specify interface of an option type.
 ///
 /// For example,
 /// ```no_run
@@ -222,7 +225,7 @@ pub trait Type {
     fn as_any(&self) -> &dyn Any;
 }
 
-/// The unique identifier of an option.
+/// The unique identifier interface of an option.
 ///
 /// For example,
 /// ```no_run
@@ -255,7 +258,7 @@ pub trait Identifier {
     fn set_id(&mut self, id: IIdentifier);
 }
 
-/// The callback information of an option.
+/// The callback interface of an option.
 ///
 /// For example,
 /// ```no_run
@@ -309,8 +312,49 @@ pub trait Callback {
     fn set_need_invoke(&mut self, invoke: bool);
 }
 
-/// The name and prefix 
+/// The name and prefix interface of an option.
 /// 
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// 
+/// struct O(pub String, pub String);
+/// 
+/// impl Name for O {
+///     fn name(&self) -> &str {
+///         self.0.as_str()
+///     }
+/// 
+///     fn prefix(&self) -> &str {
+///         self.1.as_str()
+///     }
+///     fn set_name(&mut self, s: &str) {
+///         self.0 = s.to_owned();
+///     }
+///
+///     fn set_prefix(&mut self, s: &str) {
+///         self.1 = s.to_owned();
+///     }
+///
+///     fn match_name(&self, s: &str) -> bool {
+///         self.0.as_str() == s
+///     }
+///
+///     fn match_prefix(&self, s: &str) -> bool {
+///         self.1.as_str() == s
+///     }
+/// }
+/// 
+/// let mut opt = O("count".to_owned(), "--".to_owned());
+/// 
+/// assert_eq!(opt.match_name("count"), true);
+/// assert_eq!(opt.match_prefix("--"), true);
+/// 
+/// opt.set_name("c");
+/// opt.set_prefix("-");
+/// assert_eq!(opt.match_name("c"), true);
+/// assert_eq!(opt.match_prefix("-"), true);
+/// ```
 pub trait Name {
     /// Get the name of current option,
     /// it will return "a" for "-a"
@@ -333,6 +377,49 @@ pub trait Name {
     fn match_prefix(&self, s: &str) -> bool;
 }
 
+/// The alias interface of an option.
+/// 
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// 
+/// struct O(pub Vec<(String, String)>);
+/// 
+/// impl Alias for O {
+///     fn alias(&self) -> Option<&Vec<(String, String)>> {
+///         Some(self.0.as_ref())
+///     }
+///
+///     fn add_alias(&mut self, prefix: &str, name: &str) {
+///         self.0.push((prefix.to_owned(), name.to_owned()));
+///     }
+///
+///     fn rem_alias(&mut self,  prefix: &str, name: &str) -> bool {
+///         for index in 0 .. self.0.len() {
+///             let alias = &self.0[index];
+///             if alias.0 == prefix && alias.1 == name {
+///                 self.0.remove(index);
+///                 return true;
+///             }
+///         }
+///         false
+///     }
+///
+///     fn match_alias(&self, prefix: &str, name: &str) -> bool {
+///         self.0.iter()
+///              .find(|&a| a.0 == prefix  && a.1 == name)
+///              .is_some()
+///     }
+/// }
+/// 
+/// let mut opt = O(vec![]);
+/// 
+/// opt.add_alias("--", "count");
+/// assert_eq!(opt.match_alias("--", "count"), true);
+/// 
+/// opt.rem_alias("--", "count");
+/// assert_eq!(opt.match_alias("--", "count"), false);
+/// ```
 pub trait Alias {
     /// Get the alias for current option
     fn alias(&self) -> Option<&Vec<(String, String)>>;
@@ -347,6 +434,35 @@ pub trait Alias {
     fn match_alias(&self, prefix: &str, name: &str) -> bool;
 }
 
+/// The optional interface of an option.
+/// 
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// 
+/// struct O(pub bool);
+/// 
+/// impl Optional for O {
+///     fn optional(&self) -> bool {
+///         self.0
+///     }
+///
+///     fn set_optional(&mut self, b: bool) {
+///         self.0 = b;
+///     }
+///
+///     fn match_optional(&self, b: bool) -> bool {
+///         self.0 == b
+///     }
+/// }
+/// 
+/// let mut opt = O(false);
+/// 
+/// assert_eq!(opt.match_optional(false), true);
+/// 
+/// opt.set_optional(true);
+/// assert_eq!(opt.match_optional(true), true);
+/// ```
 pub trait Optional {
     /// Return true if the option is optional
     fn optional(&self) -> bool;
@@ -358,6 +474,68 @@ pub trait Optional {
     fn match_optional(&self, b: bool) -> bool;
 }
 
+/// The value interface of an option.
+/// 
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// use getopt_rs::error::*;
+/// 
+/// struct O {
+///     value: OptValue,
+/// 
+///     default_value: OptValue,
+/// };
+/// 
+/// impl O {
+///     pub fn new() -> Self {
+///         Self { value: OptValue::default(), default_value: OptValue::default() }
+///     }
+/// }
+/// 
+/// impl Value for O {
+///    fn value(&self) -> &OptValue {
+///        &self.value
+///    }
+///
+///    fn default_value(&self) -> &OptValue {
+///        &self.default_value
+///    }
+///
+///    fn set_value(&mut self, value_para: OptValue) {
+///        self.value = value_para;
+///    }
+///
+///    fn set_default_value(&mut self, default_value_para: OptValue) {
+///        self.default_value = default_value_para;
+///    }
+///
+///    fn parse_value(&self, value_para: &str) -> Result<OptValue> {
+///        return Ok(OptValue::from_str(value_para));
+///    }
+///
+///    fn has_value(&self) -> bool {
+///        self.value().is_str()
+///    }
+///
+///    fn reset_value(&mut self) {
+///        self.set_value(self.default_value().clone());
+///    }
+/// }
+/// 
+/// let mut opt = O::new();
+/// 
+/// assert_eq!(opt.value.is_null(), true);
+/// 
+/// opt.set_value(opt.parse_value("foo").unwrap());
+/// assert_eq!(opt.value().as_str(), Some(&"foo".to_owned()));
+/// 
+/// opt.set_default_value(opt.parse_value("bar").unwrap());
+/// assert_eq!(opt.default_value().as_str(), Some(&"bar".to_owned()));
+/// 
+/// opt.reset_value();
+/// assert_eq!(opt.value().as_str(), Some(&"bar".to_owned()));
+/// ```
 pub trait Value {
     /// Get current value of the option
     fn value(&self) -> &OptValue;
@@ -381,6 +559,47 @@ pub trait Value {
     fn reset_value(&mut self);
 }
 
+/// The index interface of an non-option.
+/// 
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// 
+/// struct O(pub NonOptIndex);
+/// 
+/// impl Index for O {
+///     fn index(&self) -> &NonOptIndex {
+///         &self.0
+///     }
+///
+///     fn set_index(&mut self, index: NonOptIndex) {
+///         self.0 = index;
+///     }
+///
+///     fn match_index(&self, total: i64, current: i64) -> bool {
+///        if let Some(realindex) = self.index().calc_index(total) {
+///            return realindex == 0 || realindex == current;
+///        }
+///        false
+///     }
+/// }
+/// 
+/// let mut opt = O(NonOptIndex::Forward(3));
+/// 
+/// assert_eq!(opt.match_index(6, 3), true);
+/// assert_eq!(opt.match_index(3, 3), true);
+/// assert_eq!(opt.match_index(2, 3), false);
+/// 
+/// opt.set_index(NonOptIndex::AnyWhere);
+/// assert_eq!(opt.match_index(6, 3), true);
+/// assert_eq!(opt.match_index(3, 3), true);
+/// assert_eq!(opt.match_index(2, 3), true);
+/// 
+/// opt.set_index(NonOptIndex::Backward(3));
+/// assert_eq!(opt.match_index(6, 4), true);
+/// assert_eq!(opt.match_index(3, 1), true);
+/// assert_eq!(opt.match_index(2, 1), false);
+/// ```
 pub trait Index {
     fn index(&self) -> &NonOptIndex;
 
@@ -389,6 +608,16 @@ pub trait Index {
     fn match_index(&self, total: i64, current: i64) -> bool;
 }
 
+/// The option trait type, you need implement follow traits:
+/// 
+/// * [`Type`]
+/// * [`Identifier`]
+/// * [`Name`]
+/// * [`Alias`]
+/// * [`Optional`]
+/// * [`Value`]
+/// * [`Index`]
+/// * [`Callback`]
 pub trait Opt: Type + Identifier + Name + Alias + Optional + Value + Index + Callback + Debug { }
 
 /// Helper function clone the any value
@@ -444,8 +673,8 @@ impl OptValue {
         Self::Bool(t.into())
     }
 
-    pub fn from_arr<T: Into<Vec<String>>>(t: T) -> Self {
-        Self::Arr(t.into())
+    pub fn from_vec<T: Into<Vec<String>>>(t: T) -> Self {
+        Self::Array(t.into())
     }
 
     pub fn from_any<T: Any>(t: Box<T>) -> Self {
@@ -506,9 +735,9 @@ impl OptValue {
     }
 
     /// Return None if the value is not an OptValue::Arr
-    pub fn as_arr(&self) -> Option<&Vec<String>> {
+    pub fn as_vec(&self) -> Option<&Vec<String>> {
         match self {
-            Self::Arr(v) => Some(v),
+            Self::Array(v) => Some(v),
             _ => None,
         }
     }
@@ -570,16 +799,16 @@ impl OptValue {
     }
 
     /// Return None if the value is not an OptValue::Arr
-    pub fn as_arr_mut(&mut self) -> Option<&mut Vec<String>> {
+    pub fn as_vec_mut(&mut self) -> Option<&mut Vec<String>> {
         match self {
-            Self::Arr(v) => Some(v),
+            Self::Array(v) => Some(v),
             _ => None,
         }
     }
 
     pub fn app_value(&mut self, s: String) -> &mut Self {
         match self {
-            Self::Arr(v) => {
+            Self::Array(v) => {
                 v.push(s);
             }
             _ => { }
@@ -638,9 +867,9 @@ impl OptValue {
         }
     }
 
-    pub fn is_arr(&self) -> bool {
+    pub fn is_array(&self) -> bool {
         match self {
-            Self::Arr(_) => true,
+            Self::Array(_) => true,
             _ => false,
         }
     }
@@ -697,7 +926,7 @@ impl Clone for OptValue {
 
             Self::Bool(bv) => { Self::Bool(*bv) },
 
-            Self::Arr(vv) => { Self::Arr(vv.clone()) },
+            Self::Array(vv) => { Self::Array(vv.clone()) },
 
             Self::Null => { Self::Null },
 
@@ -1263,8 +1492,8 @@ macro_rules! opt_optional_def {
 ///
 /// fn match_alias(&self, prefix_para: &str, name_para: &str) -> bool {
 ///     self.alias.iter()
-///                         .find(|&a| a.0 == prefix_para && a.1 == name_para)
-///                         .is_some()
+///               .find(|&a| a.0 == prefix_para && a.1 == name_para)
+///               .is_some()
 /// }
 /// }
 /// ```
@@ -1357,25 +1586,10 @@ macro_rules! opt_alias_def {
 ///     }
 ///
 ///     fn match_index(&self, total: i64, current: i64) -> bool {
-///         match self.index() {
-///             NonOptIndex::Forward(offset) => {
-///                 if offset <= &total {
-///                     return offset == &current;
-///                 }
-///             }
-///             NonOptIndex::Backward(offset) => {
-///                 let realindex = total - offset;
-///                    
-///                 if realindex > 0 {
-///                     return realindex == current;
-///                 }
-///             }
-///             NonOptIndex::AnyWhere => {
-///                 return true;
-///             }
-///             _ => { }
-///         }
-///         false
+///        if let Some(realindex) = self.index().calc_index(total) {
+///            return realindex == 0 || realindex == current;
+///        }
+///        false
 ///     }
 /// }
 /// ```
@@ -1389,8 +1603,9 @@ macro_rules! opt_index_def {
 
             fn set_index(&mut self, _: NonOptIndex) { }
 
+            /// using for option
             fn match_index(&self, _: i64, _: i64) -> bool {
-                true /* option can be set in anywhere */
+                true
             }
         }
     );
@@ -1410,7 +1625,7 @@ macro_rules! opt_index_def {
 
             fn match_index(&self, total: i64, current: i64) -> bool {
                 if let Some(realindex) = self.index().calc_index(total) {
-                    return realindex == current;
+                    return realindex == 0 || realindex == current;
                 }
                 false
             }
@@ -1428,6 +1643,17 @@ pub mod str {
 
     pub trait Str: Opt { }
 
+    /// StrOpt target the value to [`String`], 
+    /// 
+    /// * The option type name is `str`.
+    /// * The option is not support deactivate style.
+    /// * The option accept the style [`Style::Argument`].
+    /// * In default, the option is `optional`, it can be change through the [`set_optional`](crate::opt::Optional::set_optional).
+    /// * The option need an [`OptValue::Str`] argument, the default value is [`OptValue::default()`].
+    /// * The option support multiple alias with different prefix and name.
+    /// * The option support callback type [`CallbackType::Value`].
+    ///
+    /// User can set it at `anywhere` of command line argument, using the string `-s "value"`, `-s=value`, `--str "value"`, etc.
     #[derive(Debug)]
     pub struct StrOpt {
         id: IIdentifier,
@@ -1538,6 +1764,7 @@ pub mod str {
         }
     }
 
+    /// Default [`Utils`] implementation for [`StrOpt`].
     #[derive(Debug)]
     pub struct StrUtils;
 
@@ -1556,11 +1783,25 @@ pub mod str {
             false
         }
 
+        /// Create an [`StrOpt`] using option information [`CreateInfo`].
+        /// 
+        /// ```no_run
+        /// use getopt_rs::utils::{Utils, CreateInfo};
+        /// use getopt_rs::opt::str::*;
+        /// use getopt_rs::id::*;
+        /// 
+        /// let utils = StrUtils::new();
+        /// let ci = CreateInfo::parse("--|name=str!").unwrap();
+        /// let _opt = utils.create(Identifier::new(1), &ci);
+        /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
             if ci.is_deactivate_style() {
                 if ! self.is_support_deactivate_style() {
-                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
+                    return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_type_name().to_owned()));
                 }
+            }
+            if ci.get_type_name() != self.type_name() {
+                return Err(Error::UtilsNotSupportTypeName(self.type_name().to_owned(), ci.get_type_name().to_owned()))
             }
             
             assert_eq!(ci.get_type_name(), self.type_name());
@@ -1600,6 +1841,17 @@ pub mod bool {
 
     pub trait Bool: Opt { }
 
+    /// BoolOpt target the value to [`bool`](prim@bool), 
+    /// 
+    /// * The option type name is `bool`.
+    /// * The option is support deactivate style.
+    /// * The option accept the style [`Style::Boolean`] and [`Style::Multiple`].
+    /// * In default, the option is `optional`, it can be change through the [`set_optional`](crate::opt::Optional::set_optional).
+    /// * The option need an [`OptValue::Bool`] argument, the default value is [`OptValue::default()`].
+    /// * The option support multiple alias with different prefix and name.
+    /// * The option support callback type [`CallbackType::Value`].
+    ///
+    /// User can set it at `anywhere` of command line argument, using the string `-q`, `-s`, `-qs`, `--quite`, `--slient`, etc.
     #[derive(Debug)]
     pub struct BoolOpt {
         id: IIdentifier,
@@ -1724,6 +1976,7 @@ pub mod bool {
         }
     }
 
+    /// Default [`Utils`] implementation for [`BoolOpt`].
     #[derive(Debug)]
     pub struct BoolUtils;
 
@@ -1742,11 +1995,25 @@ pub mod bool {
             true
         }
 
+        /// Create an [`BoolOpt`] using option information [`CreateInfo`].
+        /// 
+        /// ```no_run
+        /// use getopt_rs::utils::{Utils, CreateInfo};
+        /// use getopt_rs::opt::bool::*;
+        /// use getopt_rs::id::*;
+        /// 
+        /// let utils = BoolUtils::new();
+        /// let ci = CreateInfo::parse("--|name=bool!").unwrap();
+        /// let _opt = utils.create(Identifier::new(1), &ci);
+        /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
             if ci.is_deactivate_style() {
                 if ! self.is_support_deactivate_style() {
                     return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
                 }
+            }
+            if ci.get_type_name() != self.type_name() {
+                return Err(Error::UtilsNotSupportTypeName(self.type_name().to_owned(), ci.get_type_name().to_owned()))
             }
             
             assert_eq!(ci.get_type_name(), self.type_name());
@@ -1777,18 +2044,30 @@ pub mod bool {
     }
 }
 
-pub mod arr {
+pub mod array {
     use crate::opt::*;
     use crate::id::Identifier as IIdentifier;
 
     pub fn current_type() -> &'static str {
-        "arr"
+        "array"
     }
 
-    pub trait Arr: Opt { }
+    pub trait Array: Opt { }
 
+    /// ArrayOpt target the value to [`Vec<String>`], 
+    /// 
+    /// * The option type name is `array`.
+    /// * The option is not support deactivate style.
+    /// * The option accept the style [`Style::Argument`].
+    /// * In default, the option is `optional`, it can be change through the [`set_optional`](crate::opt::Optional::set_optional).
+    /// * The option need an [`OptValue::Array`] argument, the default value is [`OptValue::default()`].
+    /// * The option support multiple alias with different prefix and name.
+    /// * The option support callback type [`CallbackType::Value`].
+    ///
+    /// User can set it at `anywhere` of command line argument, using the string `-a "foo"`, `-a "bar"`, `-a=foo`, `--append=bar`, `--append=foo`, etc.
+    /// Set value to `ArrayOpt` will append the value to it.
     #[derive(Debug)]
-    pub struct ArrOpt {
+    pub struct ArrayOpt {
         id: IIdentifier,
 
         name: String,
@@ -1806,7 +2085,7 @@ pub mod arr {
         callback: CallbackType,
     }
 
-    impl ArrOpt {
+    impl ArrayOpt {
         pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue) -> Self {
             Self {
                 id,
@@ -1821,17 +2100,17 @@ pub mod arr {
         }
     }
 
-    opt_def!(ArrOpt, Arr);
+    opt_def!(ArrayOpt, Array);
 
     opt_type_def!(
-        ArrOpt, 
+        ArrayOpt, 
         current_type(),
         false,
         { style, Style::Argument }
     );
 
     opt_callback_def!(
-        ArrOpt,
+        ArrayOpt,
         callback,
         callback,
         CallbackType::Value,
@@ -1839,13 +2118,13 @@ pub mod arr {
     );
 
     opt_identifier_def!(
-        ArrOpt,
+        ArrayOpt,
         id,
         para,
     );
 
     opt_name_def!(
-        ArrOpt,
+        ArrayOpt,
         prefix,
         name,
         prefix,
@@ -1853,21 +2132,21 @@ pub mod arr {
     );
 
     opt_optional_def!(
-        ArrOpt,
+        ArrayOpt,
         optional,
         optional,
     );
 
     opt_alias_def!(
-        ArrOpt,
+        ArrayOpt,
         alias,
         prefix,
         name,
     );
 
-    opt_index_def!( ArrOpt );
+    opt_index_def!( ArrayOpt );
 
-    impl Value for ArrOpt {
+    impl Value for ArrayOpt {
         fn value(&self) -> &OptValue {
             &self.value
         }
@@ -1876,65 +2155,87 @@ pub mod arr {
             &self.default_value
         }
 
+        /// WARNING! 
+        /// This function will append the `value` to option's value
         fn set_value(&mut self, value_para: OptValue) {
-            self.value = value_para;
+            let mut value_para = value_para;
+
+            if value_para.is_array() {
+                if self.value.is_null() {
+                    self.value = OptValue::from_vec(vec![]);
+                }
+                self.value
+                .as_vec_mut()
+                .unwrap()
+                .append(value_para.as_vec_mut().unwrap());
+            }
         }
 
         fn set_default_value(&mut self, default_value_para: OptValue) {
             self.default_value = default_value_para;
         }
-
-        /// WARNING! 
-        /// This function will append the `value` to option's value
+        
         fn parse_value(&self, value: &str) -> Result<OptValue> {
-            // Don't mssing any value
-            let mut realv = self.value().clone();
+            let mut realv = OptValue::from_vec(vec![]);
 
-            if realv.is_null() {
-                realv = OptValue::Arr(vec![]);
-            }
             realv.app_value(value.to_owned());
             
             Ok(realv)
         }
 
         fn has_value(&self) -> bool {
-            self.value().is_arr()
+            self.value().is_array()
         }
 
         fn reset_value(&mut self) {
+            self.value = OptValue::default();
             self.set_value(self.default_value().clone());
         }
     }
 
+    /// Default [`Utils`] implementation for [`ArrayOpt`].
     #[derive(Debug)]
-    pub struct ArrUtils;
+    pub struct ArrayUtils;
 
-    impl ArrUtils {
+    impl ArrayUtils {
         pub fn new() -> Self {
             Self {}
         }
     }
 
-    impl Utils for ArrUtils {
+    impl Utils for ArrayUtils {
         fn type_name(&self) -> &str {
             current_type()
         }
 
         fn is_support_deactivate_style(&self) -> bool {
-            true
+            false
         }
 
+        /// Create an [`ArrayOpt`] using option information [`CreateInfo`].
+        /// 
+        /// ```no_run
+        /// use getopt_rs::utils::{Utils, CreateInfo};
+        /// use getopt_rs::opt::array::*;
+        /// use getopt_rs::id::*;
+        /// 
+        /// let utils = ArrayUtils::new();
+        /// let ci = CreateInfo::parse("--|name=array!").unwrap();
+        /// let _opt = utils.create(Identifier::new(1), &ci);
+        /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
             if ci.is_deactivate_style() {
                 if ! self.is_support_deactivate_style() {
                     return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
                 }
             }
+            if ci.get_type_name() != self.type_name() {
+                return Err(Error::UtilsNotSupportTypeName(self.type_name().to_owned(), ci.get_type_name().to_owned()))
+            }
             
             assert_eq!(ci.get_type_name(), self.type_name());
 
-            let mut opt = Box::new(ArrOpt::new(
+            let mut opt = Box::new(ArrayOpt::new(
                 id,
                 ci.get_name().to_owned(),
                 ci.get_prefix().to_owned(),
@@ -1969,6 +2270,17 @@ pub mod int {
 
     pub trait Int: Opt { }
 
+    /// IntOpt target the value to [`i64`], 
+    /// 
+    /// * The option type name is `int`.
+    /// * The option is not support deactivate style.
+    /// * The option accept the style [`Style::Argument`].
+    /// * In default, the option is `optional`, it can be change through the [`set_optional`](crate::opt::Optional::set_optional).
+    /// * The option need an [`OptValue::Int`] argument, the default value is [`OptValue::default()`].
+    /// * The option support multiple alias with different prefix and name.
+    /// * The option support callback type [`CallbackType::Value`].
+    ///
+    /// User can set it at `anywhere` of command line argument, using the string `-c 1`, `-c -3`, `-c=2`, `--count 4`, `--count -4`, `--count=8`, etc.
     #[derive(Debug)]
     pub struct IntOpt {
         id: IIdentifier,
@@ -2079,6 +2391,7 @@ pub mod int {
         }
     }
 
+    /// Default [`Utils`] implementation for [`IntOpt`].
     #[derive(Debug)]
     pub struct IntUtils;
 
@@ -2097,11 +2410,25 @@ pub mod int {
             false
         }
 
+        /// Create an [`IntOpt`] using option information [`CreateInfo`].
+        /// 
+        /// ```no_run
+        /// use getopt_rs::utils::{Utils, CreateInfo};
+        /// use getopt_rs::opt::int::*;
+        /// use getopt_rs::id::*;
+        /// 
+        /// let utils = IntUtils::new();
+        /// let ci = CreateInfo::parse("--|name=int!").unwrap();
+        /// let _opt = utils.create(Identifier::new(1), &ci);
+        /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
             if ci.is_deactivate_style() {
                 if ! self.is_support_deactivate_style() {
                     return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
                 }
+            }
+            if ci.get_type_name() != self.type_name() {
+                return Err(Error::UtilsNotSupportTypeName(self.type_name().to_owned(), ci.get_type_name().to_owned()))
             }
             
             assert_eq!(ci.get_type_name(), self.type_name());
@@ -2141,6 +2468,17 @@ pub mod uint {
 
     pub trait Uint: Opt { }
 
+    /// UintOpt target the value to [`u64`], 
+    /// 
+    /// * The option type name is `uint`.
+    /// * The option is not support deactivate style.
+    /// * The option accept the style [`Style::Argument`].
+    /// * In default, the option is `optional`, it can be change through the [`set_optional`](crate::opt::Optional::set_optional).
+    /// * The option need an [`OptValue::Uint`] argument, the default value is [`OptValue::default()`].
+    /// * The option support multiple alias with different prefix and name.
+    /// * The option support callback type [`CallbackType::Value`].
+    ///
+    /// User can set it at `anywhere` of command line argument, using the string `-c 1`, `-c=2`, `--count 4`, `--count=8`, etc.
     #[derive(Debug)]
     pub struct UintOpt {
         id: IIdentifier,
@@ -2251,6 +2589,7 @@ pub mod uint {
         }
     }
 
+    /// Default [`Utils`] implementation for [`UintOpt`].
     #[derive(Debug)]
     pub struct UintUtils;
 
@@ -2269,11 +2608,25 @@ pub mod uint {
             false
         }
 
+        /// Create an [`UintOpt`] using option information [`CreateInfo`].
+        /// 
+        /// ```no_run
+        /// use getopt_rs::utils::{Utils, CreateInfo};
+        /// use getopt_rs::opt::uint::*;
+        /// use getopt_rs::id::*;
+        /// 
+        /// let utils = UintUtils::new();
+        /// let ci = CreateInfo::parse("--|name=uint!").unwrap();
+        /// let _opt = utils.create(Identifier::new(1), &ci);
+        /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
             if ci.is_deactivate_style() {
                 if ! self.is_support_deactivate_style() {
                     return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
                 }
+            }
+            if ci.get_type_name() != self.type_name() {
+                return Err(Error::UtilsNotSupportTypeName(self.type_name().to_owned(), ci.get_type_name().to_owned()))
             }
             
             assert_eq!(ci.get_type_name(), self.type_name());
@@ -2313,6 +2666,17 @@ pub mod flt {
 
     pub trait Flt: Opt { }
 
+    /// FltOpt target the value to [`f64`], 
+    /// 
+    /// * The option type name is `flt`.
+    /// * The option is not support deactivate style.
+    /// * The option accept the style [`Style::Argument`].
+    /// * In default, the option is `optional`, it can be change through the [`set_optional`](crate::opt::Optional::set_optional).
+    /// * The option need an [`OptValue::Flt`] argument, the default value is [`OptValue::default()`].
+    /// * The option support multiple alias with different prefix and name.
+    /// * The option support callback type [`CallbackType::Value`].
+    ///
+    /// User can set it at `anywhere` of command line argument, using the string `-c 1.1`, `-c -2.2`, `-c=2.4`, `--count 4.2`, `--count=8.8`, etc.
     #[derive(Debug)]
     pub struct FltOpt {
         id: IIdentifier,
@@ -2423,6 +2787,7 @@ pub mod flt {
         }
     }
 
+    /// Default [`Utils`] implementation for [`FltOpt`].
     #[derive(Debug)]
     pub struct FltUtils;
 
@@ -2441,10 +2806,24 @@ pub mod flt {
             false
         }
 
+        /// Create an [`FltOpt`] using option information [`CreateInfo`].
+        /// 
+        /// ```no_run
+        /// use getopt_rs::utils::{Utils, CreateInfo};
+        /// use getopt_rs::opt::flt::*;
+        /// use getopt_rs::id::*;
+        /// 
+        /// let utils = FltUtils::new();
+        /// let ci = CreateInfo::parse("--|name=flt!").unwrap();
+        /// let _opt = utils.create(Identifier::new(1), &ci);
+        /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {if ci.is_deactivate_style() {
                 if ! self.is_support_deactivate_style() {
                     return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
                 }
+            }
+            if ci.get_type_name() != self.type_name() {
+                return Err(Error::UtilsNotSupportTypeName(self.type_name().to_owned(), ci.get_type_name().to_owned()))
             }
             
             assert_eq!(ci.get_type_name(), self.type_name());
@@ -2625,6 +3004,9 @@ pub mod example {
                     return Err(Error::UtilsNotSupportDeactivateStyle(ci.get_name().to_owned()));
                 }
             }
+            if ci.get_type_name() != self.type_name() {
+                return Err(Error::UtilsNotSupportTypeName(self.type_name().to_owned(), ci.get_type_name().to_owned()))
+            }
             
             assert_eq!(ci.get_type_name(), self.type_name());
             
@@ -2724,12 +3106,296 @@ mod tests {
         assert_eq!(opt.has_value(), false);
         opt.set_value(opt.parse_value("99").unwrap());
         assert_eq!(opt.value().as_int(), Some(&99));
-        opt.set_default_value(OptValue::from_int(42));
-        assert_eq!(opt.default_value().as_int(), Some(&42));
+        opt.set_default_value(OptValue::from_int(-42));
+        assert_eq!(opt.default_value().as_int(), Some(&-42));
         opt.reset_value();
-        assert_eq!(opt.value().as_int(), Some(&42));
+        assert_eq!(opt.value().as_int(), Some(&-42));
 
         assert_eq!(opt.as_ref().as_any().is::<int::IntOpt>(), true);
+    }
+
+    #[test]
+    fn make_opt_type_uint_work() {
+        let uint_utils = uint::UintUtils::new();
+        
+        assert_eq!(uint_utils.type_name(), uint::current_type());
+        assert_eq!(uint_utils.is_support_deactivate_style(), false);
+        
+        let ci = CreateInfo::parse("--|opt=uint!").unwrap();
+        let mut opt = uint_utils.create(IIdentifier::new(1), &ci).unwrap();
+
+        assert_eq!(opt.type_name(), "uint");
+        assert_eq!(opt.is_deactivate_style(), false);
+        assert_eq!(opt.is_style(Style::Argument), true);
+        assert_eq!(opt.check().is_err(), true);
+
+        assert_eq!(opt.id().get(), 1);
+        opt.set_id(IIdentifier::new(42));
+        assert_eq!(opt.id().get(), 42);
+
+        assert_eq!(opt.callback_type(), CallbackType::Null);
+        assert_eq!(opt.is_need_invoke(), false);
+        opt.set_need_invoke(true);
+        assert_eq!(opt.callback_type(), CallbackType::Value);
+        assert_eq!(opt.is_need_invoke(), true);
+
+        opt.add_alias("-", "c");
+        assert_eq!(opt.alias(), Some(&vec![(String::from("-"), String::from("c"))]));
+        assert_eq!(opt.match_alias("-", "c"), true);
+        assert_eq!(opt.rem_alias("-", "c"), true);
+        assert_eq!(opt.alias().as_ref().unwrap().len(), 0);
+
+        assert_eq!(opt.index(), &NonOptIndex::Null);
+        assert_eq!(opt.match_index(0, 0), true);
+        opt.set_index(NonOptIndex::Forward(3));
+        assert_eq!(opt.match_index(0, 0), true);
+
+        assert_eq!(opt.name(), "opt");
+        assert_eq!(opt.prefix(), "--");
+        assert_eq!(opt.match_name("opt"), true);
+        assert_eq!(opt.match_name("opv"), false);
+        assert_eq!(opt.match_prefix("--"), true);
+        assert_eq!(opt.match_prefix("-"), false);
+        opt.set_name("count");
+        opt.set_prefix("+");
+        assert_eq!(opt.match_name("count"), true);
+        assert_eq!(opt.match_name("opt"), false);
+        assert_eq!(opt.match_prefix("+"), true);
+        assert_eq!(opt.match_prefix("--"), false);
+
+        assert_eq!(opt.optional(), false);
+        assert_eq!(opt.match_optional(true), false);
+        opt.set_optional(true);
+        assert_eq!(opt.optional(), true);
+        assert_eq!(opt.match_optional(true), true);
+
+        assert_eq!(opt.value().is_null(), true);
+        assert_eq!(opt.default_value().is_null(), true);
+        assert_eq!(opt.has_value(), false);
+        opt.set_value(opt.parse_value("99").unwrap());
+        assert_eq!(opt.value().as_uint(), Some(&99));
+        opt.set_default_value(OptValue::from_uint(42u64));
+        assert_eq!(opt.default_value().as_uint(), Some(&42));
+        opt.reset_value();
+        assert_eq!(opt.value().as_uint(), Some(&42));
+
+        assert_eq!(opt.as_ref().as_any().is::<uint::UintOpt>(), true);
+    }
+
+    #[test]
+    fn make_opt_type_flt_work() {
+        let flt_utils = flt::FltUtils::new();
+        
+        assert_eq!(flt_utils.type_name(), flt::current_type());
+        assert_eq!(flt_utils.is_support_deactivate_style(), false);
+        
+        let ci = CreateInfo::parse("--|opt=flt!").unwrap();
+        let mut opt = flt_utils.create(IIdentifier::new(1), &ci).unwrap();
+
+        assert_eq!(opt.type_name(), "flt");
+        assert_eq!(opt.is_deactivate_style(), false);
+        assert_eq!(opt.is_style(Style::Argument), true);
+        assert_eq!(opt.check().is_err(), true);
+
+        assert_eq!(opt.id().get(), 1);
+        opt.set_id(IIdentifier::new(42));
+        assert_eq!(opt.id().get(), 42);
+
+        assert_eq!(opt.callback_type(), CallbackType::Null);
+        assert_eq!(opt.is_need_invoke(), false);
+        opt.set_need_invoke(true);
+        assert_eq!(opt.callback_type(), CallbackType::Value);
+        assert_eq!(opt.is_need_invoke(), true);
+
+        opt.add_alias("-", "c");
+        assert_eq!(opt.alias(), Some(&vec![(String::from("-"), String::from("c"))]));
+        assert_eq!(opt.match_alias("-", "c"), true);
+        assert_eq!(opt.rem_alias("-", "c"), true);
+        assert_eq!(opt.alias().as_ref().unwrap().len(), 0);
+
+        assert_eq!(opt.index(), &NonOptIndex::Null);
+        assert_eq!(opt.match_index(0, 0), true);
+        opt.set_index(NonOptIndex::Forward(3));
+        assert_eq!(opt.match_index(0, 0), true);
+
+        assert_eq!(opt.name(), "opt");
+        assert_eq!(opt.prefix(), "--");
+        assert_eq!(opt.match_name("opt"), true);
+        assert_eq!(opt.match_name("opv"), false);
+        assert_eq!(opt.match_prefix("--"), true);
+        assert_eq!(opt.match_prefix("-"), false);
+        opt.set_name("count");
+        opt.set_prefix("+");
+        assert_eq!(opt.match_name("count"), true);
+        assert_eq!(opt.match_name("opt"), false);
+        assert_eq!(opt.match_prefix("+"), true);
+        assert_eq!(opt.match_prefix("--"), false);
+
+        assert_eq!(opt.optional(), false);
+        assert_eq!(opt.match_optional(true), false);
+        opt.set_optional(true);
+        assert_eq!(opt.optional(), true);
+        assert_eq!(opt.match_optional(true), true);
+
+        assert_eq!(opt.value().is_null(), true);
+        assert_eq!(opt.default_value().is_null(), true);
+        assert_eq!(opt.has_value(), false);
+        opt.set_value(opt.parse_value("99.9").unwrap());
+        assert_eq!(opt.value().as_flt(), Some(&99.9));
+        opt.set_default_value(OptValue::from_flt(42.6));
+        assert_eq!(opt.default_value().as_flt(), Some(&42.6));
+        opt.reset_value();
+        assert_eq!(opt.value().as_flt(), Some(&42.6));
+
+        assert_eq!(opt.as_ref().as_any().is::<flt::FltOpt>(), true);
+    }
+
+    #[test]
+    fn make_opt_type_bool_work() {
+        let bool_utils = bool::BoolUtils::new();
+        
+        assert_eq!(bool_utils.type_name(), bool::current_type());
+        assert_eq!(bool_utils.is_support_deactivate_style(), true);
+        
+        let ci = CreateInfo::parse("--|opt=bool!/").unwrap();
+        let mut opt = bool_utils.create(IIdentifier::new(1), &ci).unwrap();
+
+        assert_eq!(opt.type_name(), "bool");
+        assert_eq!(opt.is_deactivate_style(), true);
+        assert_eq!(opt.is_style(Style::Boolean), true);
+        assert_eq!(opt.is_style(Style::Multiple), true);
+        assert_eq!(opt.check().is_err(), true);
+
+        assert_eq!(opt.id().get(), 1);
+        opt.set_id(IIdentifier::new(42));
+        assert_eq!(opt.id().get(), 42);
+
+        assert_eq!(opt.callback_type(), CallbackType::Null);
+        assert_eq!(opt.is_need_invoke(), false);
+        opt.set_need_invoke(true);
+        assert_eq!(opt.callback_type(), CallbackType::Value);
+        assert_eq!(opt.is_need_invoke(), true);
+
+        opt.add_alias("-", "c");
+        assert_eq!(opt.alias(), Some(&vec![(String::from("-"), String::from("c"))]));
+        assert_eq!(opt.match_alias("-", "c"), true);
+        assert_eq!(opt.rem_alias("-", "c"), true);
+        assert_eq!(opt.alias().as_ref().unwrap().len(), 0);
+
+        assert_eq!(opt.index(), &NonOptIndex::Null);
+        assert_eq!(opt.match_index(0, 0), true);
+        opt.set_index(NonOptIndex::Forward(3));
+        assert_eq!(opt.match_index(0, 0), true);
+
+        assert_eq!(opt.name(), "opt");
+        assert_eq!(opt.prefix(), "--");
+        assert_eq!(opt.match_name("opt"), true);
+        assert_eq!(opt.match_name("opv"), false);
+        assert_eq!(opt.match_prefix("--"), true);
+        assert_eq!(opt.match_prefix("-"), false);
+        opt.set_name("count");
+        opt.set_prefix("+");
+        assert_eq!(opt.match_name("count"), true);
+        assert_eq!(opt.match_name("opt"), false);
+        assert_eq!(opt.match_prefix("+"), true);
+        assert_eq!(opt.match_prefix("--"), false);
+
+        assert_eq!(opt.optional(), false);
+        assert_eq!(opt.match_optional(true), false);
+        opt.set_optional(true);
+        assert_eq!(opt.optional(), true);
+        assert_eq!(opt.match_optional(true), true);
+
+        assert_eq!(opt.value().is_null(), true);
+        assert_eq!(opt.default_value().is_null(), true);
+        assert_eq!(opt.has_value(), false);
+        opt.set_value(OptValue::from_bool(false));
+        assert_eq!(opt.value().as_bool(), Some(&false));
+        opt.set_default_value(OptValue::from_bool(true));
+        assert_eq!(opt.default_value().as_bool(), Some(&true));
+        opt.reset_value();
+        assert_eq!(opt.value().as_bool(), Some(&true));
+
+        assert_eq!(opt.as_ref().as_any().is::<bool::BoolOpt>(), true);
+    }
+
+    #[test]
+    fn make_opt_type_array_work() {
+        let bool_utils = array::ArrayUtils::new();
+        
+        assert_eq!(bool_utils.type_name(), array::current_type());
+        assert_eq!(bool_utils.is_support_deactivate_style(), false);
+        
+        let ci = CreateInfo::parse("--|opt=array!").unwrap();
+        let mut opt = bool_utils.create(IIdentifier::new(1), &ci).unwrap();
+
+        assert_eq!(opt.type_name(), "array");
+        assert_eq!(opt.is_deactivate_style(), false);
+        assert_eq!(opt.is_style(Style::Argument), true);
+        assert_eq!(opt.check().is_err(), true);
+
+        assert_eq!(opt.id().get(), 1);
+        opt.set_id(IIdentifier::new(42));
+        assert_eq!(opt.id().get(), 42);
+
+        assert_eq!(opt.callback_type(), CallbackType::Null);
+        assert_eq!(opt.is_need_invoke(), false);
+        opt.set_need_invoke(true);
+        assert_eq!(opt.callback_type(), CallbackType::Value);
+        assert_eq!(opt.is_need_invoke(), true);
+
+        opt.add_alias("-", "c");
+        assert_eq!(opt.alias(), Some(&vec![(String::from("-"), String::from("c"))]));
+        assert_eq!(opt.match_alias("-", "c"), true);
+        assert_eq!(opt.rem_alias("-", "c"), true);
+        assert_eq!(opt.alias().as_ref().unwrap().len(), 0);
+
+        assert_eq!(opt.index(), &NonOptIndex::Null);
+        assert_eq!(opt.match_index(0, 0), true);
+        opt.set_index(NonOptIndex::Forward(3));
+        assert_eq!(opt.match_index(0, 0), true);
+
+        assert_eq!(opt.name(), "opt");
+        assert_eq!(opt.prefix(), "--");
+        assert_eq!(opt.match_name("opt"), true);
+        assert_eq!(opt.match_name("opv"), false);
+        assert_eq!(opt.match_prefix("--"), true);
+        assert_eq!(opt.match_prefix("-"), false);
+        opt.set_name("count");
+        opt.set_prefix("+");
+        assert_eq!(opt.match_name("count"), true);
+        assert_eq!(opt.match_name("opt"), false);
+        assert_eq!(opt.match_prefix("+"), true);
+        assert_eq!(opt.match_prefix("--"), false);
+
+        assert_eq!(opt.optional(), false);
+        assert_eq!(opt.match_optional(true), false);
+        opt.set_optional(true);
+        assert_eq!(opt.optional(), true);
+        assert_eq!(opt.match_optional(true), true);
+
+        assert_eq!(opt.value().is_null(), true);
+        assert_eq!(opt.default_value().is_null(), true);
+        assert_eq!(opt.has_value(), false);
+        opt.set_value(OptValue::from_vec(
+            ["foo", "bar"].iter()
+                          .map(|&i|String::from(i))
+                          .collect::<Vec<String>>()
+        ));
+        assert_eq!(opt.value().as_vec(), 
+            Some(&["foo", "bar"].iter().map(|&i|String::from(i)).collect()));
+        opt.set_default_value(OptValue::from_vec(
+            ["foo", "bar", "poi"].iter()
+                .map(|&i|String::from(i))
+                .collect::<Vec<String>>()
+        ));
+        assert_eq!(opt.default_value().as_vec(), 
+            Some(&["foo", "bar", "poi"].iter().map(|&i|String::from(i)).collect::<Vec<String>>()));
+        opt.reset_value();
+        assert_eq!(opt.value().as_vec(), 
+            Some(&["foo", "bar", "poi"].iter().map(|&i|String::from(i)).collect::<Vec<String>>()));
+
+        assert_eq!(opt.as_ref().as_any().is::<array::ArrayOpt>(), true);
     }
 
     #[test]
@@ -2752,14 +3418,14 @@ mod tests {
         assert_eq!(value.as_int_mut(), Some(&mut 25));
 
         let test_cases = &[ value.is_uint(), value.is_str(), value.is_null(),
-                                      value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+                                      value.is_flt(), value.is_bool(), value.is_array(), value.is_any() ];
 
         for r in test_cases {
             assert!(! r);
         }
 
         let test_cases = &[ value.as_uint().is_none(), value.as_str().is_none(), value.as_bool_or_null().is_none(),
-                                      value.as_flt().is_none(), value.as_bool().is_none(), value.as_arr().is_none(), value.as_any().is_none() ];
+                                      value.as_flt().is_none(), value.as_bool().is_none(), value.as_vec().is_none(), value.as_any().is_none() ];
 
         for r in test_cases {
             assert!(r);
@@ -2772,14 +3438,14 @@ mod tests {
         assert_eq!(value.as_int_mut(), Some(&mut -25));
 
         let test_cases = &[ value.is_uint(), value.is_str(), value.is_null(),
-                                      value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+                                      value.is_flt(), value.is_bool(), value.is_array(), value.is_any() ];
 
         for r in test_cases {
             assert!(! r);
         }
 
         let test_cases = &[ value.as_uint().is_none(), value.as_str().is_none(), value.as_bool_or_null().is_none(),
-                                      value.as_flt().is_none(), value.as_bool().is_none(), value.as_arr().is_none(), value.as_any().is_none() ];
+                                      value.as_flt().is_none(), value.as_bool().is_none(), value.as_vec().is_none(), value.as_any().is_none() ];
 
         for r in test_cases {
             assert!(r);
@@ -2793,7 +3459,7 @@ mod tests {
         assert_eq!(value.as_uint(), Some(&33));
         assert_eq!(value.as_uint_mut(), Some(&mut 33));
 
-        let test_cases = &[ value.is_int(), value.is_str(), value.is_null(), value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+        let test_cases = &[ value.is_int(), value.is_str(), value.is_null(), value.is_flt(), value.is_bool(), value.is_array(), value.is_any() ];
 
         for r in test_cases {
             assert!(! r);
@@ -2807,7 +3473,7 @@ mod tests {
         assert_eq!(value.as_str(), Some(&String::from("value")));
         assert_eq!(value.as_str_mut(), Some(&mut String::from("value")));
 
-        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_flt(), value.is_bool(), value.is_array(), value.is_any() ];
 
         for r in test_cases {
             assert!(! r);
@@ -2820,7 +3486,7 @@ mod tests {
         assert!(value.is_null());
         assert_eq!(value.as_bool_or_null(), Some(&false));
 
-        let test_cases = &[ value.is_int(), value.is_uint(), value.is_str(), value.is_flt(), value.is_bool(), value.is_arr(), value.is_any() ];
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_str(), value.is_flt(), value.is_bool(), value.is_array(), value.is_any() ];
 
         for r in test_cases {
             assert!(! r);
@@ -2834,7 +3500,7 @@ mod tests {
         assert_eq!(value.as_flt(), Some(&1.7));
         assert_eq!(value.as_flt_mut(), Some(&mut 1.7));
 
-        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_str(), value.is_bool(), value.is_arr(), value.is_any() ];
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_str(), value.is_bool(), value.is_array(), value.is_any() ];
 
         for r in test_cases {
             assert!(! r);
@@ -2849,7 +3515,7 @@ mod tests {
         assert_eq!(value.as_bool_mut(), Some(&mut true));
         assert_eq!(value.as_bool_or_null(), Some(&true));
 
-        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_flt(), value.is_str(), value.is_arr(), value.is_any() ];
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_flt(), value.is_str(), value.is_array(), value.is_any() ];
 
         for r in test_cases {
             assert!(! r);
@@ -2858,11 +3524,11 @@ mod tests {
 
     fn make_optvalue_arr_work() {
         let mut data: Vec<String> = ["v1", "v2", "v3", "v4"].iter().map(|&v| { String::from(v)}).collect();
-        let mut value = OptValue::from_arr(data.clone());
+        let mut value = OptValue::from_vec(data.clone());
 
-        assert!(value.is_arr());
-        assert_eq!(value.as_arr(), Some(&data));
-        assert_eq!(value.as_arr_mut(), Some(&mut data));
+        assert!(value.is_array());
+        assert_eq!(value.as_vec(), Some(&data));
+        assert_eq!(value.as_vec_mut(), Some(&mut data));
 
         let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_str(), value.is_bool(), value.is_str(), value.is_any() ];
 
@@ -2882,7 +3548,7 @@ mod tests {
         assert_eq!(value.as_any().unwrap().as_ref().downcast_ref::<InnerData>(), Some(data.as_ref()));
         assert_eq!(value.as_any_mut().unwrap().as_mut().downcast_mut::<InnerData>(), Some(data.as_mut()));
 
-        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_str(), value.is_bool(), value.is_arr(), value.is_str() ];
+        let test_cases = &[ value.is_int(), value.is_uint(), value.is_null(), value.is_str(), value.is_bool(), value.is_array(), value.is_str() ];
 
         for r in test_cases {
             assert!(! r);

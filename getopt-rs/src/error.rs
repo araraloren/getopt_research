@@ -25,6 +25,9 @@ pub enum Error {
     #[error("utils `{0}` not support deactivate style")]
     UtilsNotSupportDeactivateStyle(String),
 
+    #[error("utils `{0}` not support current type: `{1}`")]
+    UtilsNotSupportTypeName(String, String),
+
     #[error("the given type is exists: `{0}`")]
     DuplicateOptionType(String),
 

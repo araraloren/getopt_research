@@ -452,3 +452,142 @@ impl<'a> FilterMut<'a> {
         self.ref_set.find_all_mut(&self.filter_info)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::opt::*;
+    use crate::nonopt::*;
+    use crate::id::Identifier as IIdentifier;
+
+    #[test]
+    fn make_sure_set_work() {
+        let mut set = DefaultSet::new();
+
+        assert_eq!(set.add_utils(Box::new(str::StrUtils::new())).is_err(), false);
+        assert_eq!(set.add_utils(Box::new(int::IntUtils::new())).is_err(), false);
+        assert_eq!(set.add_utils(Box::new(uint::UintUtils::new())).is_err(), false);
+        assert_eq!(set.add_utils(Box::new(flt::FltUtils::new())).is_err(), false);
+        assert_eq!(set.add_utils(Box::new(bool::BoolUtils::new())).is_err(), false);
+        assert_eq!(set.add_utils(Box::new(pos::PosUtils::new())).is_err(), false);
+        assert_eq!(set.add_utils(Box::new(cmd::CmdUtils::new())).is_err(), false);
+        assert_eq!(set.add_utils(Box::new(main::MainUtils::new())).is_err(), false);
+        assert_eq!(set.add_utils(Box::new(main::MainUtils::new())).is_err(), true);
+
+        assert_eq!(set.get_utils("str").unwrap().type_name(), "str");
+        assert_eq!(set.get_utils("int").unwrap().type_name(), "int");
+        assert_eq!(set.get_utils("bool").unwrap().type_name(), "bool");
+        assert_eq!(set.get_utils("cmd").unwrap().type_name(), "cmd");
+        assert_eq!(set.get_utils("main").unwrap().type_name(), "main");
+        assert_eq!(set.get_utils("pos").unwrap().type_name(), "pos");
+        
+        assert_eq!(set.rem_utils("uint").is_err(), false);
+        assert_eq!(set.get_utils("uint").is_none(), true);
+        assert_eq!(set.get_utils("flt").is_none(), false);
+        assert_eq!(set.get_utils("array").is_none(), true);
+        assert_eq!(set.rem_utils("uint").is_err(), true);
+
+        if let Ok(mut commit) = set.add_opt("-|P=bool") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Err(_) = set.add_opt("-/L=bool") {
+            assert!(true);
+        }
+        if let Ok(ci) = CreateInfo::parse("-|H=bool") {
+            assert!(set.add_opt_ci(&ci).is_ok());
+        }
+        let int_utils = int::IntUtils::new(); {
+            let fake_id = IIdentifier::new(11);
+
+            if let Ok(ci) = CreateInfo::parse("-|O=int") {
+                if let Ok(optimz) = int_utils.create(fake_id, &ci) {
+                    assert!(set.add_opt_raw(optimz).is_ok());
+                }
+            }
+            if let Ok(ci) = CreateInfo::parse("-|maxdepth=int") {
+                if let Ok(optimz) = int_utils.create(fake_id, &ci) {
+                    assert!(set.add_opt_raw(optimz).is_ok());
+                }
+            }
+            if let Ok(ci) = CreateInfo::parse("-|mindepth=int") {
+                if let Ok(optimz) = int_utils.create(fake_id, &ci) {
+                    assert!(set.add_opt_raw(optimz).is_ok());
+                }
+            }
+        }
+        let mut id = IIdentifier::new(0);
+
+        if let Ok(mut commit) = set.add_opt("-|d=bool") {
+            commit.add_alias("--", "depth");
+            let ret_id = commit.commit();
+            assert!(ret_id.is_ok());
+            id = ret_id.unwrap();
+        }
+        if let Some(depth) = set.get_opt(id.clone()) {
+            assert_eq!(depth.name(), "d");
+        }
+        if let Some(depth) = set.get_opt_mut(id.clone()) {
+            assert_eq!(depth.name(), "d");
+        }
+        if let Some(p) = set.get_opt_i(0) {
+            assert_eq!(p.name(), "P");
+        }
+        if let Some(p) = set.get_opt_mut_i(0) {
+            assert_eq!(p.name(), "P");
+        }
+        assert_eq!(set.len(), 6);
+
+        if let Ok(mut commit) = set.add_opt("-|help=bool") {
+            commit.add_alias("--", "help");
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|mount=bool") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|version=bool") {
+            commit.add_alias("--", "version");
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|amin=int") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|atime=int") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|cmin=int") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|ctime=int") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|fstype=str") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|iname=str") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("-|name=str") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("localtion=pos@1") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(mut commit) = set.add_opt("find=main") {
+            assert!(commit.commit().is_ok());
+        }
+        if let Ok(filter) = set.filter("-|help=bool") {
+            assert!(filter.find().is_some());
+        }
+        if let Ok(filter) = set.filter("-|help=str") {
+            assert!(filter.find().is_none());
+        }
+        
+        let mut fi = FilterInfo::new();
+
+        fi.set_type_name("str");
+        let vec = set.find_all(&fi);
+
+        assert_eq!(vec.len(), 3);
+    }
+}

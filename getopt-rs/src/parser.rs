@@ -120,10 +120,15 @@ impl Parser for ForwardParser {
                 debug!("parse ... {:?}", arg);
 
                 if ! matched {
-                    if let Some(ctx) = parser_gen_argument_style(&arg, iter.next()) {
+                    let multiple_ctx = parser_gen_argument_style(&arg, iter.next());
+
+                    if multiple_ctx.len() > 0 {
                         let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
-                        cp.append_ctx(ctx);
+                        for ctx in multiple_ctx {
+                            cp.append_ctx(ctx);
+                        }
+
                         matched = self.publish(cp)?;
                     }
                 }
@@ -141,10 +146,15 @@ impl Parser for ForwardParser {
                     }
                 }
                 if ! matched {
-                    if let Some(ctx) = parser_gen_boolean_style(&arg, &None) {
+                    let multiple_ctx = parser_gen_boolean_style(&arg, &None);
+
+                    if multiple_ctx.len() > 0 {
                         let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
-                        cp.append_ctx(ctx);
+                        for ctx in multiple_ctx {
+                            cp.append_ctx(ctx);
+                        }
+
                         matched = self.publish(cp)?;
                     }
                 }
@@ -310,27 +320,44 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
     }
 }
 
-pub fn parser_gen_argument_style(arg: &Argument, next_argument: &Option<String>) -> Option<Box<dyn Context>> {
+pub fn parser_gen_argument_style(arg: &Argument, next_argument: &Option<String>) -> Vec<Box<dyn Context>> {
+    let mut ret: Vec<Box<dyn Context>> = vec![];
+    let default_value = String::default();
+
     match arg.get_value() {
         Some(value) => {
-            Some(Box::new(OptContext::new(
-                arg.get_prefix().unwrap().clone(),
-                arg.get_name().unwrap().clone(),
+            ret.push(Box::new(OptContext::new(
+                arg.get_prefix().unwrap_or(&default_value).clone(),
+                arg.get_name().unwrap_or(&default_value).clone(),
                 Some(value.clone()),
                 Style::Argument,
                 false,
             )))
         }
         None => {
-            Some(Box::new(OptContext::new(
-                arg.get_prefix().unwrap().clone(),
-                arg.get_name().unwrap().clone(),
+            ret.push(Box::new(OptContext::new(
+                arg.get_prefix().unwrap_or(&default_value).clone(),
+                arg.get_name().unwrap_or(&default_value).clone(),
                 next_argument.clone(),
                 Style::Argument,
                 true,
-            )))
+            )));
+            if let Some(name) = arg.get_name() {
+                if name.len() > 2 {
+                    let name_and_value = name.split_at(1);
+
+                    ret.push(Box::new(OptContext::new(
+                        arg.get_prefix().unwrap_or(&default_value).clone(),
+                        name_and_value.0.to_owned(),
+                        Some(name_and_value.1.to_owned()),
+                        Style::Argument,
+                        false,
+                    )))
+                }
+            }
         }
     }
+    ret
 }
 
 pub fn parser_gen_multiple_style(arg: &Argument, _: &Option<String>) -> Vec<Box<dyn Context>> {
@@ -352,19 +379,22 @@ pub fn parser_gen_multiple_style(arg: &Argument, _: &Option<String>) -> Vec<Box<
     ret
 }
 
-pub fn parser_gen_boolean_style(arg: &Argument, _:  &Option<String>) -> Option<Box<dyn Context>> {
+pub fn parser_gen_boolean_style(arg: &Argument, _:  &Option<String>) -> Vec<Box<dyn Context>> {
+    let mut ret: Vec<Box<dyn Context>> = vec![];
+
     match arg.get_value() {
-        Some(_) => None,
+        Some(_) => { },
         None => {
-            Some(Box::new(OptContext::new(
+            ret.push(Box::new(OptContext::new(
                 arg.get_prefix().unwrap().clone(),
                 arg.get_name().unwrap().clone(),
                 None,
                 Style::Boolean,
                 false,
-            )))
+            )));
         }
     }    
+    ret
 }
 
 pub fn parser_gen_pos_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
