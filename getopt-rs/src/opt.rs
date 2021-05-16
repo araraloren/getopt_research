@@ -1790,8 +1790,9 @@ pub mod str {
         /// use getopt_rs::opt::str::*;
         /// use getopt_rs::id::*;
         /// 
+        /// let prefixs = vec![String::from("--")];
         /// let utils = StrUtils::new();
-        /// let ci = CreateInfo::parse("--|name=str!").unwrap();
+        /// let ci = CreateInfo::parse("--name=str!", &prefixs).unwrap();
         /// let _opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
@@ -1874,7 +1875,12 @@ pub mod bool {
     }
 
     impl BoolOpt {
-        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, deactivate_style: bool, default_value: OptValue) -> Self {
+        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, deactivate_style: bool) -> Self {
+            let default_value = if deactivate_style {
+                    OptValue::from_bool(true)
+                } else {
+                    OptValue::from_bool(false)
+            };
             Self {
                 id,
                 name,
@@ -1956,8 +1962,9 @@ pub mod bool {
             Ok(OptValue::from_bool(! self.is_deactivate_style()))
         }
 
+        /// For [`BoolOpt`], it need return true if current value is not equal default value
         fn has_value(&self) -> bool {
-            self.value().is_bool()
+            self.value().as_bool() != self.default_value().as_bool()
         }
 
         fn reset_value(&mut self) {
@@ -2002,8 +2009,9 @@ pub mod bool {
         /// use getopt_rs::opt::bool::*;
         /// use getopt_rs::id::*;
         /// 
+        /// let prefixs = vec![String::from("--")];
         /// let utils = BoolUtils::new();
-        /// let ci = CreateInfo::parse("--|name=bool!").unwrap();
+        /// let ci = CreateInfo::parse("--name=bool!", &prefixs).unwrap();
         /// let _opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
@@ -2024,7 +2032,6 @@ pub mod bool {
                 ci.get_prefix().to_owned(),
                 ci.is_optional(),
                 ci.is_deactivate_style(),
-                ci.get_default_value().clone_or(&None),
             ));
 
             let alias = ci.get_alias();
@@ -2219,8 +2226,9 @@ pub mod array {
         /// use getopt_rs::opt::array::*;
         /// use getopt_rs::id::*;
         /// 
+        /// let prefixs = vec![String::from("--")];
         /// let utils = ArrayUtils::new();
-        /// let ci = CreateInfo::parse("--|name=array!").unwrap();
+        /// let ci = CreateInfo::parse("--name=array!", &prefixs).unwrap();
         /// let _opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
@@ -2417,8 +2425,9 @@ pub mod int {
         /// use getopt_rs::opt::int::*;
         /// use getopt_rs::id::*;
         /// 
+        /// let prefixs = vec![String::from("--")];
         /// let utils = IntUtils::new();
-        /// let ci = CreateInfo::parse("--|name=int!").unwrap();
+        /// let ci = CreateInfo::parse("--name=int!", &prefixs).unwrap();
         /// let _opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
@@ -2615,8 +2624,9 @@ pub mod uint {
         /// use getopt_rs::opt::uint::*;
         /// use getopt_rs::id::*;
         /// 
+        /// let prefixs = vec![String::from("--")];
         /// let utils = UintUtils::new();
-        /// let ci = CreateInfo::parse("--|name=uint!").unwrap();
+        /// let ci = CreateInfo::parse("--name=uint!", &prefixs).unwrap();
         /// let _opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
@@ -2813,8 +2823,9 @@ pub mod flt {
         /// use getopt_rs::opt::flt::*;
         /// use getopt_rs::id::*;
         /// 
+        /// let prefixs = vec![String::from("--")];
         /// let utils = FltUtils::new();
-        /// let ci = CreateInfo::parse("--|name=flt!").unwrap();
+        /// let ci = CreateInfo::parse("--name=flt!", &prefixs).unwrap();
         /// let _opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {if ci.is_deactivate_style() {
@@ -3048,12 +3059,13 @@ mod tests {
 
     #[test]
     fn make_opt_type_int_work() {
+        let prefixs = vec!["--".to_owned()];
         let int_utils = int::IntUtils::new();
         
         assert_eq!(int_utils.type_name(), int::current_type());
         assert_eq!(int_utils.is_support_deactivate_style(), false);
         
-        let ci = CreateInfo::parse("--|opt=int!").unwrap();
+        let ci = CreateInfo::parse("--opt=int!", &prefixs).unwrap();
         let mut opt = int_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(opt.type_name(), "int");
@@ -3116,12 +3128,13 @@ mod tests {
 
     #[test]
     fn make_opt_type_uint_work() {
+        let prefixs = vec!["--".to_owned()];
         let uint_utils = uint::UintUtils::new();
         
         assert_eq!(uint_utils.type_name(), uint::current_type());
         assert_eq!(uint_utils.is_support_deactivate_style(), false);
         
-        let ci = CreateInfo::parse("--|opt=uint!").unwrap();
+        let ci = CreateInfo::parse("--opt=uint!", &prefixs).unwrap();
         let mut opt = uint_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(opt.type_name(), "uint");
@@ -3184,12 +3197,13 @@ mod tests {
 
     #[test]
     fn make_opt_type_flt_work() {
+        let prefixs = vec!["--".to_owned()];
         let flt_utils = flt::FltUtils::new();
         
         assert_eq!(flt_utils.type_name(), flt::current_type());
         assert_eq!(flt_utils.is_support_deactivate_style(), false);
         
-        let ci = CreateInfo::parse("--|opt=flt!").unwrap();
+        let ci = CreateInfo::parse("--opt=flt!", &prefixs).unwrap();
         let mut opt = flt_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(opt.type_name(), "flt");
@@ -3252,12 +3266,13 @@ mod tests {
 
     #[test]
     fn make_opt_type_bool_work() {
+        let prefixs = vec!["--".to_owned()];
         let bool_utils = bool::BoolUtils::new();
         
         assert_eq!(bool_utils.type_name(), bool::current_type());
         assert_eq!(bool_utils.is_support_deactivate_style(), true);
         
-        let ci = CreateInfo::parse("--|opt=bool!/").unwrap();
+        let ci = CreateInfo::parse("--opt=bool!/", &prefixs).unwrap();
         let mut opt = bool_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(opt.type_name(), "bool");
@@ -3306,8 +3321,10 @@ mod tests {
         assert_eq!(opt.optional(), true);
         assert_eq!(opt.match_optional(true), true);
 
-        assert_eq!(opt.value().is_null(), true);
-        assert_eq!(opt.default_value().is_null(), true);
+        assert_eq!(opt.value().is_null(), false);
+        assert_eq!(opt.default_value().is_null(), false);
+        assert_eq!(opt.value().is_bool(), true);
+        assert_eq!(opt.default_value().is_bool(), true);
         assert_eq!(opt.has_value(), false);
         opt.set_value(OptValue::from_bool(false));
         assert_eq!(opt.value().as_bool(), Some(&false));
@@ -3321,12 +3338,13 @@ mod tests {
 
     #[test]
     fn make_opt_type_array_work() {
+        let prefixs = vec!["--".to_owned()];
         let bool_utils = array::ArrayUtils::new();
         
         assert_eq!(bool_utils.type_name(), array::current_type());
         assert_eq!(bool_utils.is_support_deactivate_style(), false);
         
-        let ci = CreateInfo::parse("--|opt=array!").unwrap();
+        let ci = CreateInfo::parse("--opt=array!", &prefixs).unwrap();
         let mut opt = bool_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(opt.type_name(), "array");

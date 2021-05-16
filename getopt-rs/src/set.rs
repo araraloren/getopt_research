@@ -62,7 +62,11 @@ pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut
 
     fn iter_mut(&mut self) -> IterMut<Box<dyn Opt>>;
 
-    fn get_all_prefixs(&self) -> Vec<String>;
+    fn set_prefix(&mut self, prefixs: Vec<String>);
+
+    fn get_prefix(&self) -> &Vec<String>;
+
+    fn app_prefix(&mut self, prefix: String);
 
     fn check(&self) -> Result<bool>;
 
@@ -74,14 +78,19 @@ pub struct DefaultSet {
     opts: Vec<Box<dyn Opt>>,
 
     utils: HashMap<String, Box<dyn Utils>>,
+
+    support_prefixs: Vec<String>,
 }
 
 impl DefaultSet {
     pub fn new() -> Self {
-        Self {
+        let mut ret = Self {
             opts: vec![],
             utils: HashMap::new(),
-        }
+            support_prefixs: vec![],
+        };
+        ret.set_prefix(vec![String::from("-"), String::from("/"), String::from("--")]);
+        ret
     }
 }
 
@@ -131,7 +140,7 @@ impl Set for DefaultSet {
 
     
     fn add_opt(&mut self, opt: &str) -> Result<Commit> {
-        let ci = CreateInfo::parse(opt)?;
+        let ci = CreateInfo::parse(opt, &self.support_prefixs)?;
         Ok(Commit::new(self, ci))
     }
 
@@ -192,12 +201,12 @@ impl Set for DefaultSet {
     }
 
     fn filter(&self, opt: &str) -> Result<Filter> {
-        let fi = FilterInfo::parse(opt)?;
+        let fi = FilterInfo::parse(opt, &self.support_prefixs)?;
         Ok(Filter::new(self, fi))
     }
 
     fn filter_mut(&mut self, opt: &str) -> Result<FilterMut> {
-        let fi = FilterInfo::parse(opt)?;
+        let fi = FilterInfo::parse(opt, &self.support_prefixs)?;
         Ok(FilterMut::new(self, fi))
     }
     
@@ -249,24 +258,21 @@ impl Set for DefaultSet {
         self.opts.iter_mut()
     }
 
-    fn get_all_prefixs(&self) -> Vec<String> {
-        let mut ret: Vec<String> = vec![];
+    fn set_prefix(&mut self, mut prefixs: Vec<String>) {
+        prefixs.sort_by(|a: &String, b: &String| b.len().cmp(&a.len()));
+        debug!("Set all prefix to => {:?}", prefixs);
+        self.support_prefixs = prefixs;
+    }
 
-        for opt in &self.opts {
-            if !ret.iter().find(|s|s.as_str() == opt.prefix()).is_some() {
-                ret.push(opt.prefix().to_owned());
-            }
+    fn get_prefix(&self) -> &Vec<String> {
+        &self.support_prefixs
+    }
 
-            if let Some(alias) = opt.alias() {
-                for alias in alias.iter() {
-                    if !ret.iter().find(|s|s.as_str() == alias.0).is_some() {
-                        ret.push(alias.0.to_owned());
-                    }
-                }
-            }
-        }
+    fn app_prefix(&mut self, prefix: String) {
+        let mut current_prefixs = self.support_prefixs.clone();
 
-        ret
+        current_prefixs.push(prefix);
+        self.set_prefix(current_prefixs);
     }
 
     fn check(&self) -> Result<bool> {
@@ -488,29 +494,31 @@ mod tests {
         assert_eq!(set.get_utils("array").is_none(), true);
         assert_eq!(set.rem_utils("uint").is_err(), true);
 
-        if let Ok(mut commit) = set.add_opt("-|P=bool") {
+        set.set_prefix(vec!["--".to_owned(), "-".to_owned()]);
+
+        if let Ok(mut commit) = set.add_opt("-P=bool") {
             assert!(commit.commit().is_ok());
         }
         if let Err(_) = set.add_opt("-/L=bool") {
             assert!(true);
         }
-        if let Ok(ci) = CreateInfo::parse("-|H=bool") {
+        if let Ok(ci) = CreateInfo::parse("-H=bool", set.get_prefix()) {
             assert!(set.add_opt_ci(&ci).is_ok());
         }
         let int_utils = int::IntUtils::new(); {
             let fake_id = IIdentifier::new(11);
 
-            if let Ok(ci) = CreateInfo::parse("-|O=int") {
+            if let Ok(ci) = CreateInfo::parse("-O=int", set.get_prefix()) {
                 if let Ok(optimz) = int_utils.create(fake_id, &ci) {
                     assert!(set.add_opt_raw(optimz).is_ok());
                 }
             }
-            if let Ok(ci) = CreateInfo::parse("-|maxdepth=int") {
+            if let Ok(ci) = CreateInfo::parse("-maxdepth=int", set.get_prefix()) {
                 if let Ok(optimz) = int_utils.create(fake_id, &ci) {
                     assert!(set.add_opt_raw(optimz).is_ok());
                 }
             }
-            if let Ok(ci) = CreateInfo::parse("-|mindepth=int") {
+            if let Ok(ci) = CreateInfo::parse("-mindepth=int", set.get_prefix()) {
                 if let Ok(optimz) = int_utils.create(fake_id, &ci) {
                     assert!(set.add_opt_raw(optimz).is_ok());
                 }
@@ -518,7 +526,7 @@ mod tests {
         }
         let mut id = IIdentifier::new(0);
 
-        if let Ok(mut commit) = set.add_opt("-|d=bool") {
+        if let Ok(mut commit) = set.add_opt("-d=bool") {
             commit.add_alias("--", "depth");
             let ret_id = commit.commit();
             assert!(ret_id.is_ok());
@@ -538,36 +546,36 @@ mod tests {
         }
         assert_eq!(set.len(), 6);
 
-        if let Ok(mut commit) = set.add_opt("-|help=bool") {
+        if let Ok(mut commit) = set.add_opt("-help=bool") {
             commit.add_alias("--", "help");
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|mount=bool") {
+        if let Ok(mut commit) = set.add_opt("-mount=bool") {
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|version=bool") {
+        if let Ok(mut commit) = set.add_opt("-version=bool") {
             commit.add_alias("--", "version");
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|amin=int") {
+        if let Ok(mut commit) = set.add_opt("-amin=int") {
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|atime=int") {
+        if let Ok(mut commit) = set.add_opt("-atime=int") {
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|cmin=int") {
+        if let Ok(mut commit) = set.add_opt("-cmin=int") {
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|ctime=int") {
+        if let Ok(mut commit) = set.add_opt("-ctime=int") {
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|fstype=str") {
+        if let Ok(mut commit) = set.add_opt("-fstype=str") {
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|iname=str") {
+        if let Ok(mut commit) = set.add_opt("-iname=str") {
             assert!(commit.commit().is_ok());
         }
-        if let Ok(mut commit) = set.add_opt("-|name=str") {
+        if let Ok(mut commit) = set.add_opt("-name=str") {
             assert!(commit.commit().is_ok());
         }
         if let Ok(mut commit) = set.add_opt("localtion=pos@1") {
@@ -576,10 +584,10 @@ mod tests {
         if let Ok(mut commit) = set.add_opt("find=main") {
             assert!(commit.commit().is_ok());
         }
-        if let Ok(filter) = set.filter("-|help=bool") {
+        if let Ok(filter) = set.filter("-help=bool") {
             assert!(filter.find().is_some());
         }
-        if let Ok(filter) = set.filter("-|help=str") {
+        if let Ok(filter) = set.filter("-help=str") {
             assert!(filter.find().is_none());
         }
         
@@ -589,5 +597,10 @@ mod tests {
         let vec = set.find_all(&fi);
 
         assert_eq!(vec.len(), 3);
+
+        assert!(set.filter("help").unwrap().find().is_some());
+        assert!(set.filter("find").unwrap().find().is_some());
+        assert!(set.filter("name").unwrap().find().is_some());
+        assert!(set.filter("iname").unwrap().find().is_some());
     }
 }

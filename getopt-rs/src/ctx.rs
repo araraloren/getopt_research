@@ -20,7 +20,8 @@ pub trait Context: Debug {
     fn is_need_argument(&self) -> bool;
 }
 
-/// Contex implementation for option. 
+/// Context implementation for option. 
+/// 
 /// It will check the option name, prefix, style and alias.
 /// It will set option value if matched.
 #[derive(Debug)]
@@ -119,6 +120,10 @@ impl Context for OptContext {
     }
 }
 
+/// Context implementation for non-option. 
+/// 
+/// It will check the non-option name, index, style.
+/// It will set option value if matched, and will make the callback invokeable.
 #[derive(Debug)]
 pub struct NonOptContext {
     opt_name: String,

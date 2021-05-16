@@ -64,8 +64,8 @@ impl CreateInfo {
         }
     }
 
-    pub fn parse(s: &str) -> Result<Self> {
-        let pr = parse_opt_string(s)?;
+    pub fn parse(s: &str, prefixs: &Vec<String>) -> Result<Self> {
+        let pr = parse_opt_string(s, prefixs)?;
         let type_name = pr.type_name.ok_or(Error::NullOptionType)?;
         let opt_name = pr.opt_name.ok_or(Error::NullOptionName)?;
         Ok(Self {
@@ -216,8 +216,8 @@ impl FilterInfo {
         }
     }
 
-    pub fn parse(opt: &str) -> Result<Self> {
-        let pr = parse_opt_string(opt)?;
+    pub fn parse(opt: &str, prefixs: &Vec<String>) -> Result<Self> {
+        let pr = parse_opt_string(opt, prefixs)?;
         Ok(Self {
             deactivate: pr.deactivate,
             optional: pr.optional,
@@ -387,36 +387,61 @@ struct ParseResult {
 /// and option type is `a`.
 /// `!` means the option is optional or not.
 /// `/` means the option is deactivate style or not.
-fn parse_opt_string(s: &str) -> Result<ParseResult> {
-    const PREFIX: &str = "|";
+fn parse_opt_string(s: &str, prefixs: &Vec<String>) -> Result<ParseResult> {
     const SPLIT: &str = "=";
     const DEACTIVATE: &str = "/";
     const NO_OPTIONAL: &str = "!";
     const INDEX: &str = "@";
 
-    let splited: Vec<_> = s.split(SPLIT).collect();
+    if s.is_empty(){
+        return Err(Error::InvalidOptionStr(s.to_owned()));
+    }
+
     let mut splited_index = 0;
     let mut deactivate = None;
     let mut optional = None;
     let mut opt_index = NonOptIndex::Null;
     let opt_name;
     let mut type_name = None;
-    let mut right_info = s;
-    let mut left_info = s;
+    let right_info;
+    let left_info;
     let mut opt_prefix  = None;
+    let mut prefix_index = 0;
+    let without_prefix;
 
-    // for example, s is `-|o=a!/@1`
+    for prefix in prefixs.iter() {
+        if s.starts_with(prefix) {
+            opt_prefix = Some(prefix.clone());
+            prefix_index = prefix.len();
+            break;
+        }
+    }
+
+    if prefix_index == s.len() {
+        return Err(Error::InvalidOptionStr(s.to_owned()));
+    }
+
+    // do we have a prefix matched
+    if opt_prefix.is_none() {
+        without_prefix = s;
+    }
+    else {
+        without_prefix = s.split_at(prefix_index).1;
+    }
+
+    let splited: Vec<_> = without_prefix.split(SPLIT).collect();
+
+    // for example, s is `-o=a!/@1`, prefix is `-`
     if splited.len() == 2 {
-        // `-|o`
+        // `o`
         left_info = splited[0];
         // `a!/@1`
         right_info = splited[1];
     }
-    else if s.is_empty(){
-        return Err(Error::InvalidOptionStr(s.to_owned()));
-    }
     else {
         // without type, right_info is `-|o!/@1`
+        right_info = without_prefix;
+        left_info = without_prefix;
     }
 
     // if we have a `/`
@@ -459,29 +484,21 @@ fn parse_opt_string(s: &str) -> Result<ParseResult> {
             inner_opt_type = right_info.split_at(splited_index).0;
         };
         
-        type_name = Some(inner_opt_type.to_owned());     
+        type_name = Some(inner_opt_type.to_owned());
+        opt_name = Some(left_info.to_owned());
     }
     else {
         if splited_index == 0 {
             // we not have `/`, `!` or `@`, so right_info is option name part
-            left_info = right_info;
+            opt_name = Some(right_info.to_owned());
         }
         else {
             // left part is option name part
-            left_info  = right_info.split_at(splited_index).0;         
+            opt_name  = Some(right_info.split_at(splited_index).0.to_owned());         
         }
     }
 
-    // if we have a prefix info in option name part, such as `-|a`
-    let left_part: Vec<_> = left_info.split(PREFIX).collect();
-
-    if left_part.len() == 2 {
-        opt_prefix = Some(left_part[0].to_owned());
-        opt_name = Some(left_part[1].to_owned());
-    }
-    else {
-        opt_name = Some(left_info.to_owned());
-    }
+    debug!("Parsing ==> {:?} -> {:?} {:?} {:?}", s, opt_prefix, opt_name, type_name);
 
     return Ok(ParseResult {
         type_name,
@@ -512,38 +529,38 @@ mod tests {
             ("option=b!/", Some(("b", "option", "", NonOptIndex::Null, true, false))),
             ("option=b/!", Some(("b", "option", "", NonOptIndex::Null, true, false))),
 
-            ("-|o=b", Some(("b", "o", "-", NonOptIndex::Null, false, true))),
-            ("-|o=b!", Some(("b", "o", "-", NonOptIndex::Null, false, false))),
-            ("-|o=b/", Some(("b", "o", "-", NonOptIndex::Null, true, true))),
-            ("-|o=b!/", Some(("b", "o", "-", NonOptIndex::Null, true, false))),
-            ("-|o=b/!", Some(("b", "o", "-", NonOptIndex::Null, true, false))),
-            ("-|option=b", Some(("b", "option", "-", NonOptIndex::Null, false, true))),
-            ("-|option=b!", Some(("b", "option", "-", NonOptIndex::Null, false, false))),
-            ("-|option=b/", Some(("b", "option", "-", NonOptIndex::Null, true, true))),
-            ("-|option=b!/", Some(("b", "option", "-", NonOptIndex::Null, true, false))),
-            ("-|option=b/!", Some(("b", "option", "-", NonOptIndex::Null, true, false))),
+            ("-o=b", Some(("b", "o", "-", NonOptIndex::Null, false, true))),
+            ("-o=b!", Some(("b", "o", "-", NonOptIndex::Null, false, false))),
+            ("-o=b/", Some(("b", "o", "-", NonOptIndex::Null, true, true))),
+            ("-o=b!/", Some(("b", "o", "-", NonOptIndex::Null, true, false))),
+            ("-o=b/!", Some(("b", "o", "-", NonOptIndex::Null, true, false))),
+            ("-option=b", Some(("b", "option", "-", NonOptIndex::Null, false, true))),
+            ("-option=b!", Some(("b", "option", "-", NonOptIndex::Null, false, false))),
+            ("-option=b/", Some(("b", "option", "-", NonOptIndex::Null, true, true))),
+            ("-option=b!/", Some(("b", "option", "-", NonOptIndex::Null, true, false))),
+            ("-option=b/!", Some(("b", "option", "-", NonOptIndex::Null, true, false))),
 
-            ("--|o=b", Some(("b", "o", "--", NonOptIndex::Null, false, true))),
-            ("--|o=b!", Some(("b", "o", "--", NonOptIndex::Null, false, false))),
-            ("--|o=b/", Some(("b", "o", "--", NonOptIndex::Null, true, true))),
-            ("--|o=b!/", Some(("b", "o", "--", NonOptIndex::Null, true, false))),
-            ("--|o=b/!", Some(("b", "o", "--", NonOptIndex::Null, true, false))),
-            ("--|option=b", Some(("b", "option", "--", NonOptIndex::Null, false, true))),
-            ("--|option=b!", Some(("b", "option", "--", NonOptIndex::Null, false, false))),
-            ("--|option=b/", Some(("b", "option", "--", NonOptIndex::Null, true, true))),
-            ("--|option=b!/", Some(("b", "option", "--", NonOptIndex::Null, true, false))),
-            ("--|option=b/!", Some(("b", "option", "--", NonOptIndex::Null, true, false))),
+            ("--o=b", Some(("b", "o", "--", NonOptIndex::Null, false, true))),
+            ("--o=b!", Some(("b", "o", "--", NonOptIndex::Null, false, false))),
+            ("--o=b/", Some(("b", "o", "--", NonOptIndex::Null, true, true))),
+            ("--o=b!/", Some(("b", "o", "--", NonOptIndex::Null, true, false))),
+            ("--o=b/!", Some(("b", "o", "--", NonOptIndex::Null, true, false))),
+            ("--option=b", Some(("b", "option", "--", NonOptIndex::Null, false, true))),
+            ("--option=b!", Some(("b", "option", "--", NonOptIndex::Null, false, false))),
+            ("--option=b/", Some(("b", "option", "--", NonOptIndex::Null, true, true))),
+            ("--option=b!/", Some(("b", "option", "--", NonOptIndex::Null, true, false))),
+            ("--option=b/!", Some(("b", "option", "--", NonOptIndex::Null, true, false))),
 
-            ("/|o=b", Some(("b", "o", "/", NonOptIndex::Null, false, true))),
-            ("/|o=b!", Some(("b", "o", "/", NonOptIndex::Null, false, false))),
-            ("/|o=b/", Some(("b", "o", "/", NonOptIndex::Null, true, true))),
-            ("/|o=b!/", Some(("b", "o", "/", NonOptIndex::Null, true, false))),
-            ("/|o=b/!", Some(("b", "o", "/", NonOptIndex::Null, true, false))),
-            ("/|option=b", Some(("b", "option", "/", NonOptIndex::Null, false, true))),
-            ("/|option=b!", Some(("b", "option", "/", NonOptIndex::Null, false, false))),
-            ("/|option=b/", Some(("b", "option", "/", NonOptIndex::Null, true, true))),
-            ("/|option=b!/", Some(("b", "option", "/", NonOptIndex::Null, true, false))),
-            ("/|option=b/!", Some(("b", "option", "/", NonOptIndex::Null, true, false))),
+            ("/o=b", Some(("b", "o", "/", NonOptIndex::Null, false, true))),
+            ("/o=b!", Some(("b", "o", "/", NonOptIndex::Null, false, false))),
+            ("/o=b/", Some(("b", "o", "/", NonOptIndex::Null, true, true))),
+            ("/o=b!/", Some(("b", "o", "/", NonOptIndex::Null, true, false))),
+            ("/o=b/!", Some(("b", "o", "/", NonOptIndex::Null, true, false))),
+            ("/option=b", Some(("b", "option", "/", NonOptIndex::Null, false, true))),
+            ("/option=b!", Some(("b", "option", "/", NonOptIndex::Null, false, false))),
+            ("/option=b/", Some(("b", "option", "/", NonOptIndex::Null, true, true))),
+            ("/option=b!/", Some(("b", "option", "/", NonOptIndex::Null, true, false))),
+            ("/option=b/!", Some(("b", "option", "/", NonOptIndex::Null, true, false))),
 
             ("o", Some(("", "o", "", NonOptIndex::Null, false, true))),
             ("o!", Some(("", "o", "", NonOptIndex::Null, false, false))),
@@ -556,27 +573,27 @@ mod tests {
             ("option!/", Some(("", "option", "", NonOptIndex::Null, true, false))),
             ("option/!", Some(("", "option", "", NonOptIndex::Null, true, false))),
 
-            ("-|o", Some(("", "o", "-", NonOptIndex::Null, false, true))),
-            ("-|o!", Some(("", "o", "-", NonOptIndex::Null, false, false))),
-            ("-|o/", Some(("", "o", "-", NonOptIndex::Null, true, true))),
-            ("-|o!/", Some(("", "o", "-", NonOptIndex::Null, true, false))),
-            ("-|o/!", Some(("", "o", "-", NonOptIndex::Null, true, false))),
-            ("-|option", Some(("", "option", "-", NonOptIndex::Null, false, true))),
-            ("-|option!", Some(("", "option", "-", NonOptIndex::Null, false, false))),
-            ("-|option/", Some(("", "option", "-", NonOptIndex::Null, true, true))),
-            ("-|option!/", Some(("", "option", "-", NonOptIndex::Null, true, false))),
-            ("-|option/!", Some(("", "option", "-", NonOptIndex::Null, true, false))),
+            ("-o", Some(("", "o", "-", NonOptIndex::Null, false, true))),
+            ("-o!", Some(("", "o", "-", NonOptIndex::Null, false, false))),
+            ("-o/", Some(("", "o", "-", NonOptIndex::Null, true, true))),
+            ("-o!/", Some(("", "o", "-", NonOptIndex::Null, true, false))),
+            ("-o/!", Some(("", "o", "-", NonOptIndex::Null, true, false))),
+            ("-option", Some(("", "option", "-", NonOptIndex::Null, false, true))),
+            ("-option!", Some(("", "option", "-", NonOptIndex::Null, false, false))),
+            ("-option/", Some(("", "option", "-", NonOptIndex::Null, true, true))),
+            ("-option!/", Some(("", "option", "-", NonOptIndex::Null, true, false))),
+            ("-option/!", Some(("", "option", "-", NonOptIndex::Null, true, false))),
 
-            ("--|o", Some(("", "o", "--", NonOptIndex::Null, false, true))),
-            ("--|o!", Some(("", "o", "--", NonOptIndex::Null, false, false))),
-            ("--|o/", Some(("", "o", "--", NonOptIndex::Null, true, true))),
-            ("--|o!/", Some(("", "o", "--", NonOptIndex::Null, true, false))),
-            ("--|o/!", Some(("", "o", "--", NonOptIndex::Null, true, false))),
-            ("--|option", Some(("", "option", "--", NonOptIndex::Null, false, true))),
-            ("--|option!", Some(("", "option", "--", NonOptIndex::Null, false, false))),
-            ("--|option/", Some(("", "option", "--", NonOptIndex::Null, true, true))),
-            ("--|option!/", Some(("", "option", "--", NonOptIndex::Null, true, false))),
-            ("--|option/!", Some(("", "option", "--", NonOptIndex::Null, true, false))),
+            ("--o", Some(("", "o", "--", NonOptIndex::Null, false, true))),
+            ("--o!", Some(("", "o", "--", NonOptIndex::Null, false, false))),
+            ("--o/", Some(("", "o", "--", NonOptIndex::Null, true, true))),
+            ("--o!/", Some(("", "o", "--", NonOptIndex::Null, true, false))),
+            ("--o/!", Some(("", "o", "--", NonOptIndex::Null, true, false))),
+            ("--option", Some(("", "option", "--", NonOptIndex::Null, false, true))),
+            ("--option!", Some(("", "option", "--", NonOptIndex::Null, false, false))),
+            ("--option/", Some(("", "option", "--", NonOptIndex::Null, true, true))),
+            ("--option!/", Some(("", "option", "--", NonOptIndex::Null, true, false))),
+            ("--option/!", Some(("", "option", "--", NonOptIndex::Null, true, false))),
 
             ("o=a@1", Some(("a", "o", "", NonOptIndex::Forward(1), false, true))),
             ("o=a!@1", Some(("a", "o", "", NonOptIndex::Forward(1), false, false))),
@@ -589,16 +606,16 @@ mod tests {
             ("option=a!/@1", Some(("a", "option", "", NonOptIndex::Forward(1), true, false))),
             ("option=a/!@1", Some(("a", "option", "", NonOptIndex::Forward(1), true, false))),
 
-            ("-|o=a@1", Some(("a", "o", "-", NonOptIndex::Forward(1), false, true))),
-            ("-|o=a!@1", Some(("a", "o", "-", NonOptIndex::Forward(1), false, false))),
-            ("-|o=a/@1", Some(("a", "o", "-", NonOptIndex::Forward(1), true, true))),
-            ("-|o=a!/@1", Some(("a", "o", "-", NonOptIndex::Forward(1), true, false))),
-            ("-|o=a/!@1", Some(("a", "o", "-", NonOptIndex::Forward(1), true, false))),
-            ("-|option=a@1", Some(("a", "option", "-", NonOptIndex::Forward(1), false, true))),
-            ("-|option=a!@1", Some(("a", "option", "-", NonOptIndex::Forward(1), false, false))),
-            ("-|option=a/@1", Some(("a", "option", "-", NonOptIndex::Forward(1), true, true))),
-            ("-|option=a!/@1", Some(("a", "option", "-", NonOptIndex::Forward(1), true, false))),
-            ("-|option=a/!@1", Some(("a", "option", "-", NonOptIndex::Forward(1), true, false))),
+            ("-o=a@1", Some(("a", "o", "-", NonOptIndex::Forward(1), false, true))),
+            ("-o=a!@1", Some(("a", "o", "-", NonOptIndex::Forward(1), false, false))),
+            ("-o=a/@1", Some(("a", "o", "-", NonOptIndex::Forward(1), true, true))),
+            ("-o=a!/@1", Some(("a", "o", "-", NonOptIndex::Forward(1), true, false))),
+            ("-o=a/!@1", Some(("a", "o", "-", NonOptIndex::Forward(1), true, false))),
+            ("-option=a@1", Some(("a", "option", "-", NonOptIndex::Forward(1), false, true))),
+            ("-option=a!@1", Some(("a", "option", "-", NonOptIndex::Forward(1), false, false))),
+            ("-option=a/@1", Some(("a", "option", "-", NonOptIndex::Forward(1), true, true))),
+            ("-option=a!/@1", Some(("a", "option", "-", NonOptIndex::Forward(1), true, false))),
+            ("-option=a/!@1", Some(("a", "option", "-", NonOptIndex::Forward(1), true, false))),
             
             ("o@1", Some(("", "o", "", NonOptIndex::Forward(1), false, true))),
             ("o!@1", Some(("", "o", "", NonOptIndex::Forward(1), false, false))),
@@ -611,16 +628,16 @@ mod tests {
             ("option!/@1", Some(("", "option", "", NonOptIndex::Forward(1), true, false))),
             ("option/!@1", Some(("", "option", "", NonOptIndex::Forward(1), true, false))),
 
-            ("-|o@1", Some(("", "o", "-", NonOptIndex::Forward(1), false, true))),
-            ("-|o!@1", Some(("", "o", "-", NonOptIndex::Forward(1), false, false))),
-            ("-|o/@1", Some(("", "o", "-", NonOptIndex::Forward(1), true, true))),
-            ("-|o!/@1", Some(("", "o", "-", NonOptIndex::Forward(1), true, false))),
-            ("-|o/!@1", Some(("", "o", "-", NonOptIndex::Forward(1), true, false))),
-            ("-|option@1", Some(("", "option", "-", NonOptIndex::Forward(1), false, true))),
-            ("-|option!@1", Some(("", "option", "-", NonOptIndex::Forward(1), false, false))),
-            ("-|option/@1", Some(("", "option", "-", NonOptIndex::Forward(1), true, true))),
-            ("-|option!/@1", Some(("", "option", "-", NonOptIndex::Forward(1), true, false))),
-            ("-|option/!@1", Some(("", "option", "-", NonOptIndex::Forward(1), true, false))),
+            ("-o@1", Some(("", "o", "-", NonOptIndex::Forward(1), false, true))),
+            ("-o!@1", Some(("", "o", "-", NonOptIndex::Forward(1), false, false))),
+            ("-o/@1", Some(("", "o", "-", NonOptIndex::Forward(1), true, true))),
+            ("-o!/@1", Some(("", "o", "-", NonOptIndex::Forward(1), true, false))),
+            ("-o/!@1", Some(("", "o", "-", NonOptIndex::Forward(1), true, false))),
+            ("-option@1", Some(("", "option", "-", NonOptIndex::Forward(1), false, true))),
+            ("-option!@1", Some(("", "option", "-", NonOptIndex::Forward(1), false, false))),
+            ("-option/@1", Some(("", "option", "-", NonOptIndex::Forward(1), true, true))),
+            ("-option!/@1", Some(("", "option", "-", NonOptIndex::Forward(1), true, false))),
+            ("-option/!@1", Some(("", "option", "-", NonOptIndex::Forward(1), true, false))),
 
             ("o=a@-3", Some(("a", "o", "", NonOptIndex::Backward(3), false, true))),
             ("o=a!@-3", Some(("a", "o", "", NonOptIndex::Backward(3), false, false))),
@@ -672,8 +689,10 @@ mod tests {
             ("option=a@-2/!", None),
         ];
 
+        let prefixs = vec!["--".to_owned(), "/".to_owned(), "-".to_owned()];
+
         for case in test_cases.iter() {
-            match parse_opt_string(case.0) {
+            match parse_opt_string(case.0, &prefixs) {
                 Ok(ci) => {
                     let test_ci = case.1.as_ref().unwrap();
 

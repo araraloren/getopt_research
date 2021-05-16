@@ -97,6 +97,10 @@ impl ForwardParser {
     pub fn set_argument_matched(&mut self) {
         self.argument_matched = true;
     }
+
+    pub fn get_prefix(&self) -> &Vec<String> {
+        self.set.as_ref().unwrap().get_prefix()
+    }
 }
 
 impl Parser for ForwardParser {
@@ -105,7 +109,6 @@ impl Parser for ForwardParser {
             return Ok(None);
         }
 
-        iter.set_prefix(self.set.as_ref().unwrap().get_all_prefixs());
         debug!("---- In ForwardParser, start process option");
 
         while ! iter.reach_end() {
@@ -115,7 +118,7 @@ impl Parser for ForwardParser {
             self.argument_matched = false;
             debug!("**** ArgIterator [{:?}, {:?}]", iter.current(), iter.next());
 
-            if let Ok(arg) = iter.parse() {
+            if let Ok(arg) = iter.parse(self.get_prefix()) {
 
                 debug!("parse ... {:?}", arg);
 
@@ -254,7 +257,6 @@ impl Parser for ForwardParser {
     }
 
     fn reset(&mut self) {
-        self.cached_infos.clear();
         self.noa.clear();
         self.set.as_mut().unwrap().reset();
         self.argument_matched = false;
@@ -343,7 +345,7 @@ pub fn parser_gen_argument_style(arg: &Argument, next_argument: &Option<String>)
                 true,
             )));
             if let Some(name) = arg.get_name() {
-                if name.len() > 2 {
+                if name.len() >= 2 {
                     let name_and_value = name.split_at(1);
 
                     ret.push(Box::new(OptContext::new(
@@ -498,4 +500,176 @@ pub fn parser_default_nonopt_check(set: &dyn Set) -> Result<bool> {
         force_names.clear();
     }        
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use core::panicking::assert_failed;
+
+    use super::*;
+    use crate::{arg::ArgIterator, set::*};
+    use crate::id::DefaultIdGen;
+    use crate::opt::*;
+    use crate::nonopt::*;
+    use crate::callback::*;
+
+    #[test]
+    fn make_sure_forwardparser_work() {
+        let id = DefaultIdGen::default();
+        let mut set = DefaultSet::new();
+        let mut parser = ForwardParser::new(Box::new(id));
+
+        assert!(set.add_utils(Box::new(bool::BoolUtils::new())).unwrap_or(false));
+        assert!(set.add_utils(Box::new(str::StrUtils::new())).unwrap_or(false));
+        assert!(set.add_utils(Box::new(array::ArrayUtils::new())).unwrap_or(false));
+        assert!(set.add_utils(Box::new(pos::PosUtils::new())).unwrap_or(false));
+        assert!(set.add_utils(Box::new(cmd::CmdUtils::new())).unwrap_or(false));
+        assert!(set.add_utils(Box::new(main::MainUtils::new())).unwrap_or(false));
+
+        set.app_prefix("+".to_owned());
+
+        if let Ok(mut commit) = set.add_opt("-c=array") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-h=array") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-cpp=array") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-cfg=array") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-m=array") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-w=array") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("+a=array") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-no=array") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-i=bool") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-only=str") {
+            commit.commit().unwrap();
+        }
+        if let Ok(mut commit) = set.add_opt("-d=bool") {
+            commit.add_alias("--", "debug");
+            commit.commit().unwrap();
+        }
+
+        fn directory(set: &dyn Set, noa: &Vec<String>) -> Result<bool> {
+            assert!(set.filter("c").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("c")));
+            assert!(set.filter("cpp").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("cpp")));
+            assert!(set.filter("cpp").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("c++")));
+            assert!(set.filter("cpp").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("cxx")));
+            assert!(set.filter("h").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("h")));
+            assert!(set.filter("h").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("hpp")));
+            assert!(set.filter("h").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("hxx")));
+            assert!(set.filter("cfg").unwrap().find().unwrap()
+                       .value().as_str().unwrap()
+                       .eq("cpp"));
+            assert!(set.filter("m").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("mk")));
+            assert!(set.filter("m").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("m4")));
+            assert!(set.filter("w").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("Makefile")));
+            assert!(set.filter("a").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("png")));
+            assert!(set.filter("a").unwrap().find().unwrap()
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("jpg")));
+            assert!(set.filter("i").unwrap().find().unwrap()
+                       .value().as_bool().unwrap());
+            assert!(set.filter("debug").unwrap().find().unwrap()
+                       .value().as_bool().unwrap());
+            assert_eq!(noa[0], String::from("download/sources"));
+            Ok(true)
+        }
+
+        if let Ok(mut commit) = set.add_opt("directory=pos@1") {
+            let id = commit.commit().unwrap();
+            parser.set_callback(id, 
+                OptCallback::from_main(Box::new(SimpleMainCallback::new(
+                    directory
+                ))));
+        }
+
+        if let Ok(mut commit) = set.add_opt("other=main") {
+            let id = commit.commit().unwrap();
+            parser.set_callback(id, 
+                OptCallback::from_main(Box::new(SimpleMainCallback::new(
+                    |_set, noa| {
+                        assert_eq!(noa[0], String::from("download/sources"));
+                        assert_eq!(noa[1], String::from("picture/pngs"));
+                        assert_eq!(noa[1], String::from("picture/jpgs"));
+                        Ok(true)
+                    }
+                )))
+            );
+        }
+
+        let mut ai = ArgIterator::new();
+
+        ai.set_args(&mut [
+            "-c", "c",
+            "-cpp=cxx", "-cpp", "c++", "-cpp", "cpp",
+            "-h", "hpp", "-h=h", "-hhxx",
+            "-cfg=cpp",
+            "-m=mk", "-mm4",
+            "-w", "Makefile",
+            "+a", "png", "+a", "jpg",
+            "-i",
+            "--debug",
+            "download/sources",
+            "picture/pngs",
+            "picture/jpgs",
+        ].iter().map(|&v|String::from(v)));
+
+        parser.publish_to(Box::new(set));
+        parser.parse(&mut ai).unwrap();
+        parser.reset();
+        assert!(parser.set().as_ref().unwrap().filter("c").unwrap().find().unwrap()
+                       .value().is_null());
+        assert!(parser.set().as_ref().unwrap().filter("cpp").unwrap().find().unwrap()
+                    .value().is_null());
+        assert!(parser.set().as_ref().unwrap().filter("h").unwrap().find().unwrap()
+                       .value().is_null());
+        assert!(parser.set().as_ref().unwrap().filter("cfg").unwrap().find().unwrap()
+                    .value().is_null());
+        assert!(parser.set().as_ref().unwrap().filter("m").unwrap().find().unwrap()
+                       .value().is_null());
+        assert!(parser.set().as_ref().unwrap().filter("w").unwrap().find().unwrap()
+                    .value().is_null());
+        assert!(parser.set().as_ref().unwrap().filter("a").unwrap().find().unwrap()
+                       .value().is_null());
+        assert!(! parser.set().as_ref().unwrap().filter("i").unwrap().find().unwrap()
+                    .value().as_bool_or_null().unwrap_or(&false));
+        assert!(! parser.set().as_ref().unwrap().filter("debug").unwrap().find().unwrap()
+                       .value().as_bool_or_null().unwrap_or(&false));
+    }
 }

@@ -8,10 +8,6 @@ use std::iter::Iterator;
 /// `IndexIterator` iterate the arguments by index.
 /// It can access [`current`](IndexIterator::current) and [`next`](IndexIterator::next) argument at same time.
 pub trait IndexIterator : Debug {
-    /// Set available prefixs for all options.
-    /// This is will help [`IndexIterator`] parse the argument.
-    fn set_prefix(&mut self, prefix: Vec<String>);
-
     /// Set [`std::iter::Iterator`] of arguments.
     fn set_args(&mut self, args: &mut dyn Iterator<Item = String>);
 
@@ -37,7 +33,7 @@ pub trait IndexIterator : Debug {
     fn skip(&mut self);
 
     /// Parsing current argument to [`Argument`]
-    fn parse(&self) -> Result<Argument>;
+    fn parse(&self, prefixs: &Vec<String>) -> Result<Argument>;
 
     fn reset(&mut self);
 }
@@ -99,16 +95,22 @@ impl ArgIterator {
             next_arg: None,
         }
     }
+
+    pub fn from_args(args: &mut dyn std::iter::Iterator<Item = String>) -> Self {
+        let mut ret = Self {
+            cache_prefixs: vec![],
+            index: 0,
+            total: 0,
+            args: vec![],
+            arg: None,
+            next_arg: None,
+        };
+        ret.set_args(args);
+        ret
+    }
 }
 
 impl IndexIterator for ArgIterator {
-    fn set_prefix(&mut self, prefixs: Vec<String>) {
-        let mut prefixs = prefixs;
-        prefixs.sort_by(|a: &String, b: &String| b.len().cmp(&a.len()));
-        debug!("Set all prefix to => {:?}", prefixs);
-        self.cache_prefixs = prefixs;
-    }
-
     fn set_args(&mut self, args: &mut dyn std::iter::Iterator<Item = String>) {
         self.args = args.map(|s|s).collect();
         self.total = self.args.len();
@@ -148,8 +150,8 @@ impl IndexIterator for ArgIterator {
         self.index += 1;
     }
 
-    fn parse(&self) -> Result<Argument> {
-        parse_argument(self.current(), &self.cache_prefixs)
+    fn parse(&self, prefixs: &Vec<String>) -> Result<Argument> {
+        parse_argument(self.current(), prefixs)
     }
 
     fn reset(&mut self) {
@@ -219,8 +221,7 @@ mod tests {
             let mut iter = ArgIterator::new();
 
             iter.set_args(&mut data);
-            iter.set_prefix(vec!["-".to_owned()]);
-            testing_one_iterator(&mut iter, &backup, &check);
+            testing_one_iterator(&mut iter, &vec!["-".to_owned()], &backup, &check);
         }
 
         {// test1
@@ -240,12 +241,11 @@ mod tests {
             let mut iter = ArgIterator::new();
 
             iter.set_args(&mut data);
-            iter.set_prefix(vec!["-".to_owned(), "--".to_owned(), "+".to_owned()]);
-            testing_one_iterator(&mut iter, &backup, &check);
+            testing_one_iterator(&mut iter, &vec!["--".to_owned(), "-".to_owned(), "+".to_owned()], &backup, &check);
         }
     }
 
-    fn testing_one_iterator(iter: &mut dyn IndexIterator, original_data: &Vec<String>, check: &Vec<Vec<String>>) {
+    fn testing_one_iterator(iter: &mut dyn IndexIterator, prefixs: &Vec<String>, original_data: &Vec<String>, check: &Vec<Vec<String>>) {
         
         assert!(iter.current().is_none());
         assert!(iter.next().is_none());
@@ -269,7 +269,7 @@ mod tests {
         while ! iter.reach_end() {
             iter.fill_current_and_next();
 
-            if let Ok(data) = iter.parse() {
+            if let Ok(data) = iter.parse(prefixs) {
                 assert_eq!(data.get_prefix(), check[iter.current_index()].get(0));
                 assert_eq!(data.get_name(), check[iter.current_index()].get(1));
                 assert_eq!(data.get_value(), check[iter.current_index()].get(2));

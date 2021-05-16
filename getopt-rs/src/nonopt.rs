@@ -192,7 +192,7 @@ pub mod pos {
         /// use getopt_rs::id::*;
         /// 
         /// let utils = PosUtils::new();
-        /// let ci = CreateInfo::parse("name=pos@2").unwrap();
+        /// let ci = CreateInfo::parse("name=pos@2", &vec![]).unwrap();
         /// let _non_opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
@@ -397,7 +397,7 @@ pub mod cmd {
         /// use getopt_rs::id::*;
         /// 
         /// let utils = CmdUtils::new();
-        /// let ci = CreateInfo::parse("name=cmd").unwrap();
+        /// let ci = CreateInfo::parse("name=cmd", &vec![]).unwrap();
         /// let _non_opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
@@ -618,7 +618,7 @@ pub mod main {
         /// use getopt_rs::id::*;
         /// 
         /// let utils = MainUtils::new();
-        /// let ci = CreateInfo::parse("name=main").unwrap();
+        /// let ci = CreateInfo::parse("name=main", &vec![]).unwrap();
         /// let _non_opt = utils.create(Identifier::new(1), &ci);
         /// ```
         fn create(&self, id: IIdentifier, ci: &CreateInfo) -> Result<Box<dyn Opt>> {
@@ -661,7 +661,7 @@ mod tests {
         assert_eq!(pos_utils.type_name(), pos::current_type());
         assert_eq!(pos_utils.is_support_deactivate_style(), false);
         
-        let ci = CreateInfo::parse("nonopt=pos@2").unwrap();
+        let ci = CreateInfo::parse("nonopt=pos@2", &vec![]).unwrap();
         let mut nonopt = pos_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(nonopt.type_name(), "pos");
@@ -729,7 +729,7 @@ mod tests {
         assert_eq!(cmd_utils.type_name(), cmd::current_type());
         assert_eq!(cmd_utils.is_support_deactivate_style(), false);
         
-        let ci = CreateInfo::parse("nonopt=cmd").unwrap();
+        let ci = CreateInfo::parse("nonopt=cmd", &vec![]).unwrap();
         let mut nonopt = cmd_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(nonopt.type_name(), "cmd");
@@ -797,7 +797,7 @@ mod tests {
         assert_eq!(cmd_utils.type_name(), main::current_type());
         assert_eq!(cmd_utils.is_support_deactivate_style(), false);
         
-        let ci = CreateInfo::parse("nonopt=main").unwrap();
+        let ci = CreateInfo::parse("nonopt=main", &vec![]).unwrap();
         let mut nonopt = cmd_utils.create(IIdentifier::new(1), &ci).unwrap();
 
         assert_eq!(nonopt.type_name(), "main");
