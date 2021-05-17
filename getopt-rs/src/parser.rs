@@ -109,6 +109,14 @@ impl Parser for ForwardParser {
             return Ok(None);
         }
 
+        let opt_order = [
+            GenStyle::GS_Equal_With_Value,
+            GenStyle::GS_Argument,
+            GenStyle::GS_Boolean,
+            GenStyle::GS_Mutliple_Option,
+            GenStyle::GS_Embedded_Value,
+        ];
+
         debug!("---- In ForwardParser, start process option");
 
         while ! iter.reach_end() {
@@ -122,43 +130,19 @@ impl Parser for ForwardParser {
 
                 debug!("parse ... {:?}", arg);
 
-                if ! matched {
-                    let multiple_ctx = parser_gen_argument_style(&arg, iter.next());
+                for opt_style in &opt_order {
+                    if ! matched {
+                        let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
 
-                    if multiple_ctx.len() > 0 {
-                        let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                        if multiple_ctx.len() > 0 {
+                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
-                        for ctx in multiple_ctx {
-                            cp.append_ctx(ctx);
+                            for ctx in multiple_ctx {
+                                cp.append_ctx(ctx);
+                            }
+
+                            matched = self.publish(cp)?;
                         }
-
-                        matched = self.publish(cp)?;
-                    }
-                }
-                if ! matched {
-                    let multiple_ctx = parser_gen_multiple_style(&arg, &None);
-
-                    if multiple_ctx.len() > 0 {
-                        let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
-
-                        for ctx in multiple_ctx {
-                            cp.append_ctx(ctx);
-                        }
-
-                        matched = self.publish(cp)?;
-                    }
-                }
-                if ! matched {
-                    let multiple_ctx = parser_gen_boolean_style(&arg, &None);
-
-                    if multiple_ctx.len() > 0 {
-                        let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
-
-                        for ctx in multiple_ctx {
-                            cp.append_ctx(ctx);
-                        }
-
-                        matched = self.publish(cp)?;
                     }
                 }
             }
@@ -182,20 +166,28 @@ impl Parser for ForwardParser {
 
         // process cmd and pos
         if noa_total > 0 {
-            debug!("---- In ForwardParser, start process cmd");
-            if let Some(ctx) = parser_gen_cmd_style(&self.noa()[0], noa_total as i64, 1) {
+            debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Cmd);
+            let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
+
+            if non_opt_cmd.len() > 0 {
                 let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
-                cp.append_ctx(ctx);
+                for non_opt in non_opt_cmd {
+                    cp.append_ctx(non_opt);
+                }
                 self.publish(cp)?;
             }
 
-            debug!("---- In ForwardParser, start process pos");
+            debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Pos);
             for index in 1 ..= noa_total {
-                if let Some(ctx) = parser_gen_pos_style(&self.noa()[index - 1], noa_total as i64, index as i64) {
+                let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
+
+                if non_opt_pos.len() > 0  {
                     let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
-                    cp.append_ctx(ctx);
+                    for non_opt in non_opt_pos {
+                        cp.append_ctx(non_opt);
+                    }
                     self.publish(cp)?;
                 }
             }
@@ -203,11 +195,15 @@ impl Parser for ForwardParser {
 
         self.check_nonopt()?;
 
-        debug!("---- In ForwardParser, start process main");
-        if let Some(ctx) = parser_gen_main_style(&String::new(), 0, 0) {
+        debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Main);
+        let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
+
+        if non_opt_main.len() > 0 {
             let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
-            cp.append_ctx(ctx);
+            for main in non_opt_main {
+                cp.append_ctx(main);
+            }
             self.publish(cp)?;
         }
 
@@ -290,7 +286,7 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
                                 let index = opt.index().calc_index(length as i64);
 
                                 if let Some(index) = index {
-                                    let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize])?;
+                                    let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1])?;
                                     // can we fix this long call?
                                     self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap().set_value(OptValue::from_bool(ret));
                                 }
@@ -322,93 +318,110 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
     }
 }
 
-pub fn parser_gen_argument_style(arg: &Argument, next_argument: &Option<String>) -> Vec<Box<dyn Context>> {
-    let mut ret: Vec<Box<dyn Context>> = vec![];
-    let default_value = String::default();
+#[allow(non_camel_case_types)]
+#[derive(Debug)]
+enum GenStyle {
+    GS_Equal_With_Value,
+    GS_Argument,
+    GS_Embedded_Value,
+    GS_Mutliple_Option,
+    GS_Boolean,
+    GS_Non_Main,
+    GS_Non_Pos,
+    GS_Non_Cmd,
+}
 
-    match arg.get_value() {
-        Some(value) => {
-            ret.push(Box::new(OptContext::new(
-                arg.get_prefix().unwrap_or(&default_value).clone(),
-                arg.get_name().unwrap_or(&default_value).clone(),
-                Some(value.clone()),
-                Style::Argument,
-                false,
-            )))
-        }
-        None => {
-            ret.push(Box::new(OptContext::new(
-                arg.get_prefix().unwrap_or(&default_value).clone(),
-                arg.get_name().unwrap_or(&default_value).clone(),
-                next_argument.clone(),
-                Style::Argument,
-                true,
-            )));
-            if let Some(name) = arg.get_name() {
-                if name.len() >= 2 {
-                    let name_and_value = name.split_at(1);
+impl GenStyle {
+    pub fn gen_opt(&self, arg: &Argument, next_argument: &Option<String>) -> Vec<Box<dyn Context>> {
+        let mut ret: Vec<Box<dyn Context>> = vec![];
+        let default_value = String::default();
 
+        match self {
+            Self::GS_Equal_With_Value => {
+                if let Some(value) = arg.get_value() {
                     ret.push(Box::new(OptContext::new(
-                        arg.get_prefix().unwrap_or(&default_value).clone(),
-                        name_and_value.0.to_owned(),
-                        Some(name_and_value.1.to_owned()),
-                        Style::Argument,
-                        false,
-                    )))
+                    arg.get_prefix().unwrap_or(&default_value).clone(),
+                    arg.get_name().unwrap_or(&default_value).clone(),
+                    Some(value.clone()),
+                    Style::Argument,
+                    false)));
                 }
             }
-        }
-    }
-    ret
-}
-
-pub fn parser_gen_multiple_style(arg: &Argument, _: &Option<String>) -> Vec<Box<dyn Context>> {
-    let mut ret: Vec<Box<dyn Context>> = vec![];
-
-    if arg.get_value().is_none() {
-        if arg.get_name().unwrap().len() > 1 {
-            for char in arg.get_name().unwrap().chars() {
-                ret.push(Box::new(OptContext::new(
-                    arg.get_prefix().unwrap().clone(),
-                    String::from(char),
-                    None,
-                    Style::Multiple,
-                    false,
-                )))
+            Self::GS_Argument => {
+                if arg.get_value().is_none() {
+                    ret.push(Box::new(OptContext::new(
+                        arg.get_prefix().unwrap_or(&default_value).clone(),
+                        arg.get_name().unwrap_or(&default_value).clone(),
+                        next_argument.clone(),
+                        Style::Argument,
+                        true)));
+                }
             }
+            Self::GS_Embedded_Value => {
+                if arg.get_value().is_none() {
+                    if let Some(name) = arg.get_name() {
+                        if name.len() >= 2 {
+                            let name_and_value = name.split_at(1);
+
+                            ret.push(Box::new(OptContext::new(
+                                arg.get_prefix().unwrap_or(&default_value).clone(),
+                                name_and_value.0.to_owned(),
+                                Some(name_and_value.1.to_owned()),
+                                Style::Argument,
+                                false,
+                            )))
+                        }
+                    }
+                }
+            }
+            Self::GS_Mutliple_Option => {
+                if arg.get_value().is_none() {
+                    if arg.get_name().unwrap().len() > 1 {
+                        for char in arg.get_name().unwrap().chars() {
+                            ret.push(Box::new(OptContext::new(
+                                arg.get_prefix().unwrap().clone(),
+                                String::from(char),
+                                None,
+                                Style::Multiple,
+                                false,
+                            )))
+                        }
+                    }
+                }
+            }
+            Self::GS_Boolean => {
+                if arg.get_value().is_none() {
+                    ret.push(Box::new(OptContext::new(
+                        arg.get_prefix().unwrap().clone(),
+                        arg.get_name().unwrap().clone(),
+                        None,
+                        Style::Boolean,
+                        false,
+                    )));
+                }
+            }
+            _ => { }
         }
+        ret
     }
-    ret
-}
 
-pub fn parser_gen_boolean_style(arg: &Argument, _:  &Option<String>) -> Vec<Box<dyn Context>> {
-    let mut ret: Vec<Box<dyn Context>> = vec![];
+    pub fn gen_nonopt(&self, noa: &String, total: i64, current: i64)-> Vec<Box<dyn Context>> {
+        let mut ret: Vec<Box<dyn Context>> = vec![];
 
-    match arg.get_value() {
-        Some(_) => { },
-        None => {
-            ret.push(Box::new(OptContext::new(
-                arg.get_prefix().unwrap().clone(),
-                arg.get_name().unwrap().clone(),
-                None,
-                Style::Boolean,
-                false,
-            )));
+        match self {
+            Self::GS_Non_Pos => {
+                ret.push(Box::new(NonOptContext::new( noa.clone(), Style::Pos, total, current )));
+            }
+            Self::GS_Non_Cmd => {
+                ret.push(Box::new(NonOptContext::new( noa.clone(), Style::Cmd, total, current )));
+            }
+            Self::GS_Non_Main => {
+                ret.push(Box::new(NonOptContext::new( noa.clone(), Style::Main, total, current )));
+            }
+            _ => { }
         }
-    }    
-    ret
-}
-
-pub fn parser_gen_pos_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
-    Some(Box::new(NonOptContext::new( noa.clone(), Style::Pos, total, current )))
-}
-
-pub fn parser_gen_cmd_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
-    Some(Box::new(NonOptContext::new( noa.clone(), Style::Cmd, total, current )))
-}
-
-pub fn parser_gen_main_style(noa: &String, total: i64, current: i64)-> Option<Box<dyn Context>> {
-    Some(Box::new(NonOptContext::new( noa.clone(), Style::Main, total, current )))
+        ret
+    }
 }
 
 /// This function will call function [`check`](crate::opt::Type::check)
