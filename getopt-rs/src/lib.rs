@@ -21,6 +21,8 @@ pub mod prelude {
     pub use crate::set::DefaultSet;
     pub use crate::arg::IndexIterator;
     pub use crate::arg::ArgIterator;
+    pub use crate::id::IdGenerator;
+    pub use crate::id::DefaultIdGen;
 }
 
 use prelude::*;
@@ -62,4 +64,8 @@ pub fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser>>) 
         }
     }
     None
+}
+
+pub fn create_idgenerator(id: u64) -> Box<dyn IdGenerator>  {
+    Box::new(DefaultIdGen::new(crate::id::Identifier::new(id)))
 }

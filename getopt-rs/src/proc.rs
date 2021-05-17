@@ -31,6 +31,8 @@ pub trait Proc: Debug {
 
     fn append_ctx(&mut self, ctx: Box<dyn Context>);
 
+    fn get_ctx(&self) -> &Vec<Box<dyn Context>>;
+
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
 
     fn is_need_argument(&self) -> bool;
@@ -75,6 +77,10 @@ impl Proc for SequenceProc {
 
     fn append_ctx(&mut self, ctx: Box<dyn Context>) {
         self.contexts.push(ctx);
+    }
+
+    fn get_ctx(&self) -> &Vec<Box<dyn Context>> {
+        &self.contexts
     }
 
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
