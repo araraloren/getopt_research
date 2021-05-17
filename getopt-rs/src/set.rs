@@ -6,6 +6,15 @@ use std::ops::Index;
 use std::ops::IndexMut;
 use std::collections::HashMap;
 
+use crate::opt::int::IntUtils;
+use crate::opt::str::StrUtils;
+use crate::opt::uint::UintUtils;
+use crate::opt::flt::FltUtils;
+use crate::opt::array::ArrayUtils;
+use crate::opt::bool::BoolUtils;
+use crate::nonopt::pos::PosUtils;
+use crate::nonopt::cmd::CmdUtils;
+use crate::nonopt::main::MainUtils;
 use crate::opt::Opt;
 use crate::opt::OptValue;
 use crate::opt::NonOptIndex;
@@ -21,6 +30,8 @@ use crate::utils::FilterInfo;
 
 pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut<Identifier> {
     fn add_utils(&mut self, utils: Box<dyn Utils>) -> Result<bool>;
+
+    fn app_utils(&mut self, utils: Vec<Box<dyn Utils>>) -> Result<bool>;
 
     fn rem_utils(&mut self, type_name: &str) -> Result<bool>;
 
@@ -84,13 +95,27 @@ pub struct DefaultSet {
 
 impl DefaultSet {
     pub fn new() -> Self {
-        let mut ret = Self {
+        Self {
             opts: vec![],
             utils: HashMap::new(),
             support_prefixs: vec![],
-        };
-        ret.set_prefix(vec![String::from("-"), String::from("/"), String::from("--")]);
-        ret
+        }
+    }
+
+    pub fn initialize_utils(&mut self) -> Result<bool> {
+        self.add_utils(Box::new(IntUtils::new()))?;
+        self.add_utils(Box::new(StrUtils::new()))?;
+        self.add_utils(Box::new(UintUtils::new()))?;
+        self.add_utils(Box::new(FltUtils::new()))?;
+        self.add_utils(Box::new(ArrayUtils::new()))?;
+        self.add_utils(Box::new(BoolUtils::new()))?;
+        self.add_utils(Box::new(PosUtils::new()))?;
+        self.add_utils(Box::new(CmdUtils::new()))?;
+        self.add_utils(Box::new(MainUtils::new()))
+    }
+
+    pub fn initialize_prefixs(&mut self) {
+        self.set_prefix(vec![String::from("-"), String::from("/"), String::from("--")]);
     }
 }
 
@@ -115,6 +140,11 @@ impl Set for DefaultSet {
         else {
             Err(Error::DuplicateOptionType(utils.type_name().to_owned()))
         }
+    }
+
+    fn app_utils(&mut self, utils: Vec<Box<dyn Utils>>) -> Result<bool> {
+        for util in utils { self.add_utils(util)?; }
+        Ok(true)
     }
 
     fn rem_utils(&mut self, type_name: &str) -> Result<bool> {

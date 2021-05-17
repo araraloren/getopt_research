@@ -23,7 +23,7 @@ use std::fmt::Debug;
 use std::collections::HashMap;
 
 pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
-    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<ReturnValue>>;
+    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>>;
 
     fn publish_to(&mut self, set: Box<dyn Set>);
 
@@ -104,11 +104,10 @@ impl ForwardParser {
 }
 
 impl Parser for ForwardParser {
-    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<ReturnValue>> {
+    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
         if self.set.is_none() {
             return Ok(None);
         }
-
         let opt_order = [
             GenStyle::GS_Equal_With_Value,
             GenStyle::GS_Argument,
@@ -118,7 +117,6 @@ impl Parser for ForwardParser {
         ];
 
         debug!("---- In ForwardParser, start process option");
-
         while ! iter.reach_end() {
             let mut matched = false;
 
@@ -127,9 +125,7 @@ impl Parser for ForwardParser {
             debug!("**** ArgIterator [{:?}, {:?}]", iter.current(), iter.next());
 
             if let Ok(arg) = iter.parse(self.get_prefix()) {
-
                 debug!("parse ... {:?}", arg);
-
                 for opt_style in &opt_order {
                     if ! matched {
                         let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
@@ -209,7 +205,7 @@ impl Parser for ForwardParser {
 
         self.check_other()?;
 
-        Ok(Some(ReturnValue::new(&self.noa, self.set.as_ref().unwrap().as_ref())))
+        Ok(Some(false))
     }
 
     fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>) {

@@ -38,7 +38,7 @@ pub trait IndexIterator : Debug {
     fn reset(&mut self);
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Argument {
     prefix: Option<String>,
 
