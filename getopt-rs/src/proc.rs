@@ -29,14 +29,19 @@ pub trait Subscriber {
 pub trait Proc: Debug {
     fn id(&self) -> Identifier;
 
-    fn append_ctx(&mut self, ctx: Box<dyn Context>);
+    /// Append the context to current Proc
+    fn app_ctx(&mut self, ctx: Box<dyn Context>);
 
+    /// Get all the context in the Proc
     fn get_ctx(&self) -> &Vec<Box<dyn Context>>;
 
+    /// Process the option
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
 
+    /// If the matched option need argument
     fn is_need_argument(&self) -> bool;
 
+    /// If all the context matched
     fn is_matched(&self) -> bool;
 }
 
@@ -55,8 +60,6 @@ pub struct SequenceProc {
     contexts: Vec<Box<dyn Context>>,
 
     need_argument: bool,
-
-    matched: bool,
 }
 
 impl SequenceProc {
@@ -65,7 +68,6 @@ impl SequenceProc {
             id,
             contexts: vec![],
             need_argument: false,
-            matched: false,
         }
     }
 }
@@ -75,7 +77,7 @@ impl Proc for SequenceProc {
         self.id
     }
 
-    fn append_ctx(&mut self, ctx: Box<dyn Context>) {
+    fn app_ctx(&mut self, ctx: Box<dyn Context>) {
         self.contexts.push(ctx);
     }
 
@@ -88,26 +90,25 @@ impl Proc for SequenceProc {
             debug!("Skip process {:?}, it matched", self.id());
             return Ok(true);
         }
+        let mut matched = false;
 
-        self.matched = true;
         self.need_argument = false;
-
         for ctx in self.contexts.iter_mut() {
             if ! ctx.is_matched() {
                 if ctx.match_opt(opt) {
                     ctx.process(opt)?;
                     self.need_argument = self.need_argument || ctx.is_need_argument();
-                }
-                else {
-                    self.matched = false;
+                    matched = true;
                 }
             }
         }
-        Ok(self.matched)
+        Ok(matched)
     }
 
     fn is_matched(&self) -> bool {
-        self.matched
+        let mut ret = true;
+        self.get_ctx().iter().for_each(|v| ret = ret && v.is_matched());
+        ret
     }
 
     fn is_need_argument(&self) -> bool {

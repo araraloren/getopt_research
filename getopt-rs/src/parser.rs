@@ -145,7 +145,7 @@ impl Parser for ForwardParser {
                             let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                             for ctx in multiple_ctx {
-                                cp.append_ctx(ctx);
+                                cp.app_ctx(ctx);
                             }
 
                             matched = self.publish(cp)?;
@@ -180,7 +180,7 @@ impl Parser for ForwardParser {
                 let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                 for non_opt in non_opt_cmd {
-                    cp.append_ctx(non_opt);
+                    cp.app_ctx(non_opt);
                 }
                 self.publish(cp)?;
             }
@@ -193,7 +193,7 @@ impl Parser for ForwardParser {
                     let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                     for non_opt in non_opt_pos {
-                        cp.append_ctx(non_opt);
+                        cp.app_ctx(non_opt);
                     }
                     self.publish(cp)?;
                 }
@@ -209,14 +209,14 @@ impl Parser for ForwardParser {
             let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
             for main in non_opt_main {
-                cp.append_ctx(main);
+                cp.app_ctx(main);
             }
             self.publish(cp)?;
         }
 
         self.check_other()?;
 
-        Ok(Some(false))
+        Ok(Some(true))
     }
 
     fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>) {
@@ -286,10 +286,14 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
                     opt.set_need_invoke(false);
                     self.invoke_callback(&id, callback_type)?;
                 }
-                if proc.is_need_argument() {
-                    self.set_argument_matched();
-                }
             }
+            if proc.is_matched() {
+                debug!("Proc<{:?}> Matched", proc.id());
+                break;
+            }
+        }
+        if proc.is_matched() && proc.is_need_argument() {
+            self.set_argument_matched();
         }
 
         Ok(proc.is_matched())
@@ -408,7 +412,7 @@ impl Parser for DelayParser {
                             let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                             for ctx in multiple_ctx {
-                                cp.append_ctx(ctx);
+                                cp.app_ctx(ctx);
                             }
 
                             matched = self.publish(cp)?;
@@ -444,7 +448,7 @@ impl Parser for DelayParser {
                 let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                 for non_opt in non_opt_cmd {
-                    cp.append_ctx(non_opt);
+                    cp.app_ctx(non_opt);
                 }
                 self.publish(cp)?;
             }
@@ -457,7 +461,7 @@ impl Parser for DelayParser {
                     let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
                     for non_opt in non_opt_pos {
-                        cp.append_ctx(non_opt);
+                        cp.app_ctx(non_opt);
                     }
                     self.publish(cp)?;
                 }
@@ -491,14 +495,14 @@ impl Parser for DelayParser {
             let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
 
             for main in non_opt_main {
-                cp.append_ctx(main);
+                cp.app_ctx(main);
             }
             self.publish(cp)?;
         }
 
         self.check_other()?;
 
-        Ok(Some(false))
+        Ok(Some(true))
     }
 
     fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>) {
@@ -553,6 +557,7 @@ impl Publisher<Box<dyn Proc>> for DelayParser {
     fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
         let mut proc = msg;
         let mut value_keeper: HashMap::<Identifier, OptValue> = HashMap::new();
+        let mut process_id: Vec<Identifier> = vec![];
 
         debug!("Receive msg<{:?}> => {:?}", &proc.id(), &proc);
         
@@ -566,7 +571,7 @@ impl Publisher<Box<dyn Proc>> for DelayParser {
 
             if res {
                 for ctx in proc.get_ctx() {
-                    if ctx.is_matched() {
+                    if ctx.is_matched() && !process_id.contains(&id) {
                         let default_string = String::default();
                         let v = ctx.get_next_argument().as_ref().unwrap_or(&default_string);
                         let value = opt.parse_value(v.as_str())?;
@@ -581,6 +586,7 @@ impl Publisher<Box<dyn Proc>> for DelayParser {
                                 opt.set_value(value);
                             }
                         }
+                        process_id.push(id.clone());
                         break;
                     }
                 }
@@ -588,10 +594,16 @@ impl Publisher<Box<dyn Proc>> for DelayParser {
                     opt.set_need_invoke(false);
                     self.invoke_callback(&id, callback_type)?;
                 }
-                if proc.is_need_argument() {
-                    self.set_argument_matched();
-                }
             }
+
+            if proc.is_matched() {
+                debug!("Proc<{:?}> Matched", proc.id());
+                break;
+            }
+        }
+
+        if proc.is_matched() && proc.is_need_argument() {
+            self.set_argument_matched();
         }
 
         for (id, value) in value_keeper {
@@ -1155,8 +1167,6 @@ mod tests {
         if let Ok(mut commit) = set.add_opt("directory=pos@1") {
             let _id = commit.commit().unwrap();
         }
-
-        
 
         if let Ok(mut commit) = set.add_opt("other=main") {
             let id = commit.commit().unwrap();

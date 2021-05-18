@@ -5,8 +5,12 @@ use crate::opt::Opt;
 use crate::opt::Style;
 use crate::error::Result;
 use crate::error::Error;
+use crate::id::Identifier;
 
 pub trait Context: Debug {
+    /// Get context identifier inside [`Proc`](crate::proc::Proc)
+    fn id(&self) -> &Identifier;
+
     /// Check if the opt is matched with current context
     fn match_opt(&self, opt: &dyn Opt) -> bool;
 
@@ -32,6 +36,8 @@ pub trait Context: Debug {
 /// It will set option value if matched.
 #[derive(Debug)]
 pub struct OptContext {
+    id: Identifier,
+
     opt_prefix: String,
 
     opt_name: String,
@@ -54,6 +60,7 @@ impl OptContext {
         skip_next_arg: bool
     ) -> Self {
         Self {
+            id: Identifier::new(0),
             opt_prefix: prefix,
             opt_name: name,
             next_argument: arg,
@@ -90,6 +97,10 @@ impl OptContext {
 }
 
 impl Context for OptContext {
+    fn id(&self) -> &Identifier {
+        &self.id
+    }
+
     fn match_opt(&self, opt: &dyn Opt) -> bool {
         let matched = 
             opt.is_style(self.style.clone()) &&
@@ -140,6 +151,8 @@ impl Context for OptContext {
 /// It will set option value if matched, and will make the callback invokeable.
 #[derive(Debug)]
 pub struct NonOptContext {
+    id: Identifier,
+
     opt_name: String,
 
     style: Style,
@@ -154,12 +167,17 @@ pub struct NonOptContext {
 impl NonOptContext {
     pub fn new(opt_name: String, style: Style, total: i64, current: i64) -> Self {
         Self {
+            id: Identifier::new(0),
             opt_name,
             style,
             total,
             current,
             matched: false,
         }
+    }
+
+    pub fn id(&self) -> &Identifier {
+        &self.id
     }
 
     pub fn set_name(&mut self, name: String) -> &mut Self {
@@ -184,6 +202,10 @@ impl NonOptContext {
 }
 
 impl Context for NonOptContext {
+    fn id(&self) -> &Identifier {
+        &self.id
+    }
+
     fn match_opt(&self, opt: &dyn Opt) -> bool {
         let matched = 
             opt.is_style(self.style.clone()) && 
@@ -228,6 +250,8 @@ impl Context for NonOptContext {
 /// It will not set option value if matched.
 #[derive(Debug)]
 pub struct DelayContext {
+    id: Identifier,
+
     opt_prefix: String,
 
     opt_name: String,
@@ -250,6 +274,7 @@ impl DelayContext {
         skip_next_arg: bool
     ) -> Self {
         Self {
+            id: Identifier::new(0),
             opt_prefix: prefix,
             opt_name: name,
             next_argument: arg,
@@ -286,6 +311,10 @@ impl DelayContext {
 }
 
 impl Context for DelayContext {
+    fn id(&self) -> &Identifier {
+        &self.id
+    }
+
     fn match_opt(&self, opt: &dyn Opt) -> bool {
         let matched = 
             opt.is_style(self.style.clone()) &&

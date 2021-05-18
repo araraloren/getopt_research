@@ -29,7 +29,7 @@ use prelude::*;
 
 #[macro_export]
 macro_rules! getopt {
-    ( $( $parser:ident ),+ ) => {
+    ( $( $parser:ident ),+ ) => {{
         use getopt_rs::getopt_impl;
         use getopt_rs::arg::IndexIterator;
         use getopt_rs::arg::ArgIterator;
@@ -37,29 +37,34 @@ macro_rules! getopt {
         let parsers: Vec<Box<dyn Parser>>  = vec![ $( Box::new($parser) ),+ ];
         let mut iter = ArgIterator::new();
 
-        iter.set_args(&mut std::env::args());
+        iter.set_args(&mut std::env::args().skip(1));
         getopt_impl(&mut iter, parsers)
-    };
+    }};
 
-    ( $iter:expr, $( $parser:ident ),+ ) => {
+    ( $iter:expr, $( $parser:ident ),+ ) => {{
         use getopt_rs::getopt_impl;
 
         let parsers: Vec<Box<dyn Parser>>  = vec![ $( Box::new($parser) ),+ ];
 
         getopt_impl($iter, parsers)
-    };
+    }};
 }
 
 pub fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser>>) -> Option<Box<dyn Parser>> {
     for mut parser in parsers {
-        if let Ok(ret) = parser.parse(iter) {
-            if let Some(ret) = ret {
-                if ret {
-                    return Some(parser);
+        match parser.parse(iter) {
+            Ok(ret) => {
+                if let Some(ret) = ret {
+                    if ret {
+                        return Some(parser);
+                    }
+                    else {
+                        iter.reset();
+                    }
                 }
-                else {
-                    iter.reset();
-                }
+            }
+            Err(e) => {
+                error!("CATCH {:?}", e);
             }
         }
     }
