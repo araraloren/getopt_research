@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 getopt-rs = { path = "getopt-rs" }
 simplelog = "0.10.0"
-log = "0.4.14"
+regex = "*"
