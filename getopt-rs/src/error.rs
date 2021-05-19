@@ -39,4 +39,7 @@ pub enum Error {
 
     #[error("need non-option: `{0}`")]
     NonOptionForceRequired(String),
+
+    #[error("invalid callback type: `{0}`")]
+    InvalidCallbackType(String),
 }

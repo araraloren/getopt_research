@@ -22,8 +22,9 @@ use crate::error::Error;
 use std::fmt::Debug;
 use std::collections::HashMap;
 
+#[maybe_async::maybe_async(?Send)]
 pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
-    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>>;
+    async fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>>;
 
     fn publish_to(&mut self, set: Box<dyn Set>);
 
@@ -114,8 +115,9 @@ impl ForwardParser {
     }
 }
 
+#[maybe_async::maybe_async(?Send)]
 impl Parser for ForwardParser {
-    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
+    async fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
         if self.set.is_none() {
             return Ok(None);
         }
@@ -135,7 +137,7 @@ impl Parser for ForwardParser {
             self.argument_matched = false;
             debug!("**** ArgIterator [{:?}, {:?}]", iter.current(), iter.next());
 
-            if let Ok(arg) = iter.parse(self.get_prefix()) {
+            if let Ok(arg) = iter.parse(self.get_prefix()).await {
                 debug!("parse ... {:?}", arg);
                 for opt_style in &opt_order {
                     if ! matched {
@@ -148,7 +150,7 @@ impl Parser for ForwardParser {
                                 cp.app_ctx(ctx);
                             }
 
-                            matched = self.publish(cp)?;
+                            matched = self.publish(cp).await?;
                         }
                     }
                 }
@@ -182,7 +184,7 @@ impl Parser for ForwardParser {
                 for non_opt in non_opt_cmd {
                     cp.app_ctx(non_opt);
                 }
-                self.publish(cp)?;
+                self.publish(cp).await?;
             }
 
             debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Pos);
@@ -195,7 +197,7 @@ impl Parser for ForwardParser {
                     for non_opt in non_opt_pos {
                         cp.app_ctx(non_opt);
                     }
-                    self.publish(cp)?;
+                    self.publish(cp).await?;
                 }
             }
         }
@@ -211,7 +213,7 @@ impl Parser for ForwardParser {
             for main in non_opt_main {
                 cp.app_ctx(main);
             }
-            self.publish(cp)?;
+            self.publish(cp).await?;
         }
 
         self.check_other()?;
@@ -266,8 +268,9 @@ impl Parser for ForwardParser {
     }
 }
 
+#[maybe_async::maybe_async(?Send)]
 impl Publisher<Box<dyn Proc>> for ForwardParser {
-    fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+    async fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
         let mut proc = msg;
 
         debug!("Receive msg<{:?}> => {:?}", &proc.id(), &proc);
@@ -275,7 +278,7 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
         for index in 0 .. self.cached_infos.len() {
             let info = self.cached_infos.get_mut(index).unwrap();
             let opt = self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap(); // id always exist, so just unwrap
-            let res = proc.process(opt)?;
+            let res = proc.process(opt).await?;
             let need_invoke = opt.is_need_invoke();
             let callback_type = opt.callback_type();
 
@@ -381,8 +384,9 @@ impl DelayParser {
     }
 }
 
+#[maybe_async::maybe_async(?Send)]
 impl Parser for DelayParser {
-    fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
+    async fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
         if self.set.is_none() {
             return Ok(None);
         }
@@ -402,7 +406,7 @@ impl Parser for DelayParser {
             self.argument_matched = false;
             debug!("**** ArgIterator [{:?}, {:?}]", iter.current(), iter.next());
 
-            if let Ok(arg) = iter.parse(self.get_prefix()) {
+            if let Ok(arg) = iter.parse(self.get_prefix()).await {
                 debug!("parse ... {:?}", arg);
                 for opt_style in &opt_order {
                     if ! matched {
@@ -415,7 +419,7 @@ impl Parser for DelayParser {
                                 cp.app_ctx(ctx);
                             }
 
-                            matched = self.publish(cp)?;
+                            matched = self.publish(cp).await?;
                         }
                     }
                 }
@@ -450,7 +454,7 @@ impl Parser for DelayParser {
                 for non_opt in non_opt_cmd {
                     cp.app_ctx(non_opt);
                 }
-                self.publish(cp)?;
+                self.publish(cp).await?;
             }
 
             debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Pos);
@@ -463,7 +467,7 @@ impl Parser for DelayParser {
                     for non_opt in non_opt_pos {
                         cp.app_ctx(non_opt);
                     }
-                    self.publish(cp)?;
+                    self.publish(cp).await?;
                 }
             }
         }
@@ -497,7 +501,7 @@ impl Parser for DelayParser {
             for main in non_opt_main {
                 cp.app_ctx(main);
             }
-            self.publish(cp)?;
+            self.publish(cp).await?;
         }
 
         self.check_other()?;
@@ -553,8 +557,9 @@ impl Parser for DelayParser {
     }
 }
 
+#[maybe_async::maybe_async(?Send)]
 impl Publisher<Box<dyn Proc>> for DelayParser {
-    fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+    async fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
         let mut proc = msg;
         let mut value_keeper: HashMap::<Identifier, OptValue> = HashMap::new();
         let mut process_id: Vec<Identifier> = vec![];
@@ -564,7 +569,7 @@ impl Publisher<Box<dyn Proc>> for DelayParser {
         for index in 0 .. self.cached_infos.len() {
             let info = self.cached_infos.get_mut(index).unwrap();
             let opt = self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap(); // id always exist, so just unwrap
-            let res = proc.process(opt)?;
+            let res = proc.process(opt).await?;
             let mut need_invoke = opt.is_need_invoke();
             let callback_type = opt.callback_type();
             let id = info.id();

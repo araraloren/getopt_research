@@ -7,6 +7,7 @@ use std::iter::Iterator;
 
 /// `IndexIterator` iterate the arguments by index.
 /// It can access [`current`](IndexIterator::current) and [`next`](IndexIterator::next) argument at same time.
+#[maybe_async::maybe_async(?Send)]
 pub trait IndexIterator : Debug {
     /// Set [`std::iter::Iterator`] of arguments.
     fn set_args(&mut self, args: &mut dyn Iterator<Item = String>);
@@ -33,7 +34,7 @@ pub trait IndexIterator : Debug {
     fn skip(&mut self);
 
     /// Parsing current argument to [`Argument`]
-    fn parse(&self, prefixs: &Vec<String>) -> Result<Argument>;
+    async fn parse(&self, prefixs: &Vec<String>) -> Result<Argument>;
 
     fn reset(&mut self);
 }
@@ -110,6 +111,7 @@ impl ArgIterator {
     }
 }
 
+#[maybe_async::maybe_async(?Send)]
 impl IndexIterator for ArgIterator {
     fn set_args(&mut self, args: &mut dyn std::iter::Iterator<Item = String>) {
         self.args = args.map(|s|s).collect();
@@ -150,8 +152,8 @@ impl IndexIterator for ArgIterator {
         self.index += 1;
     }
 
-    fn parse(&self, prefixs: &Vec<String>) -> Result<Argument> {
-        parse_argument(self.current(), prefixs)
+    async fn parse(&self, prefixs: &Vec<String>) -> Result<Argument> {
+        parse_argument(self.current(), prefixs).await
     }
 
     fn reset(&mut self) {
@@ -161,8 +163,10 @@ impl IndexIterator for ArgIterator {
     }
 }
 
-
-pub fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
+/// Parsing the string to [`Argument`].
+/// The given `prefixs` need be sorted by length in descending order.
+#[maybe_async::maybe_async]
+pub async fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
     match s {
         Some(s) => {
             const SPLIT: &'static str = "=";

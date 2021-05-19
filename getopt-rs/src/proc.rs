@@ -14,8 +14,9 @@ pub trait Info: Debug {
     fn id(&self) -> Identifier;
 }
 
+#[maybe_async::maybe_async(?Send)]
 pub trait Publisher<M: Message> {
-    fn publish(&mut self, msg: M) -> Result<bool>;
+    async fn publish(&mut self, msg: M) -> Result<bool>;
 
     fn reg_subscriber(&mut self, info: Box<dyn Info>);
 
@@ -26,6 +27,7 @@ pub trait Subscriber {
     fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>);
 }
 
+#[maybe_async::maybe_async(?Send)]
 pub trait Proc: Debug {
     fn id(&self) -> Identifier;
 
@@ -36,7 +38,7 @@ pub trait Proc: Debug {
     fn get_ctx(&self) -> &Vec<Box<dyn Context>>;
 
     /// Process the option
-    fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
+    async fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
 
     /// If the matched option need argument
     fn is_need_argument(&self) -> bool;
@@ -72,6 +74,7 @@ impl SequenceProc {
     }
 }
 
+#[maybe_async::maybe_async(?Send)]
 impl Proc for SequenceProc {
     fn id(&self) -> Identifier {
         self.id
@@ -85,7 +88,7 @@ impl Proc for SequenceProc {
         &self.contexts
     }
 
-    fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
+    async fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
         if self.is_matched() {
             debug!("Skip process {:?}, it matched", self.id());
             return Ok(true);

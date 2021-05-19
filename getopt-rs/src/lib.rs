@@ -13,6 +13,8 @@ pub mod nonopt;
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate maybe_async;
 
 pub mod prelude {
     pub use crate::set::Set;
@@ -50,9 +52,10 @@ macro_rules! getopt {
     }};
 }
 
-pub fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser>>) -> Option<Box<dyn Parser>> {
+#[maybe_async::maybe_async]
+pub async fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser>>) -> Option<Box<dyn Parser>> {
     for mut parser in parsers {
-        match parser.parse(iter) {
+        match parser.parse(iter).await {
             Ok(ret) => {
                 if let Some(ret) = ret {
                     if ret {
