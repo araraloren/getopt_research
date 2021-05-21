@@ -21,9 +21,15 @@ use crate::error::Error;
 
 use std::fmt::Debug;
 use std::collections::HashMap;
+use async_trait::async_trait;
 
+#[async_trait(?Send)]
 pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
+    #[cfg(not(feature="async"))]
     fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>>;
+
+    #[cfg(feature="async")]
+    async fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>>;
 
     fn publish_to(&mut self, set: Box<dyn Set>);
 
@@ -83,6 +89,7 @@ impl ForwardParser {
         self.set.as_ref().unwrap().get_prefix()
     }
 
+    #[cfg(not(feature="async"))]
     pub fn invoke_callback(&mut self, id: &Identifier, callback_type: CallbackType) -> Result<bool> {
         let opt = self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap();
 
@@ -112,9 +119,42 @@ impl ForwardParser {
         }
         Ok(true)
     }
+
+    #[cfg(feature="async")]
+    pub async fn invoke_callback(&mut self, id: &Identifier, callback_type: CallbackType) -> Result<bool> {
+        let opt = self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap();
+
+        if let Some(callback) = self.callbacks.get_mut(id) {
+            debug!("!!!! Calling callback of {:?}", id);
+            match callback_type {
+                CallbackType::Value => {
+                    callback.call_value(opt).await?;
+                }
+                CallbackType::Index => {
+                    let length = self.noa.len();
+                    let index = opt.index().calc_index(length as i64);
+
+                    if let Some(index) = index {
+                        let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1]).await?;
+                        // can we fix this long call?
+                        self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
+                    }
+                }
+                CallbackType::Main => {
+                    let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa).await?;
+                    // can we fix this long call?
+                    self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
+                }
+                _ => { }
+            }
+        }
+        Ok(true)
+    }
 }
 
+#[async_trait(?Send)]
 impl Parser for ForwardParser {
+    #[cfg(not(feature="async"))]
     fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
         if self.set.is_none() {
             return Ok(None);
@@ -219,6 +259,111 @@ impl Parser for ForwardParser {
         Ok(Some(true))
     }
 
+    #[cfg(feature="async")]
+    async fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
+        if self.set.is_none() {
+            return Ok(None);
+        }
+        let opt_order = [
+            GenStyle::GS_Equal_With_Value,
+            GenStyle::GS_Argument,
+            GenStyle::GS_Boolean,
+            GenStyle::GS_Mutliple_Option,
+            GenStyle::GS_Embedded_Value,
+        ];
+
+        debug!("---- In ForwardParser, start process option");
+        while ! iter.reach_end() {
+            let mut matched = false;
+
+            iter.fill_current_and_next();
+            self.argument_matched = false;
+            debug!("**** ArgIterator [{:?}, {:?}]", iter.current(), iter.next());
+
+            if let Ok(arg) = iter.parse(self.get_prefix()).await {
+                debug!("parse ... {:?}", arg);
+                for opt_style in &opt_order {
+                    if ! matched {
+                        let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
+
+                        if multiple_ctx.len() > 0 {
+                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+                            for ctx in multiple_ctx {
+                                cp.app_ctx(ctx);
+                            }
+
+                            matched = self.publish(cp).await?;
+                        }
+                    }
+                }
+            }
+
+            // If next argument matched, skip it
+            if matched && self.argument_matched {
+                iter.skip();
+            }
+            if !matched {
+                if let Some(arg) = iter.current() {
+                    self.noa.push(arg.clone());
+                }
+            }
+
+            iter.skip();
+        }
+
+        self.check_opt()?;
+
+        let noa_total = self.noa().len();
+
+        // process cmd and pos
+        if noa_total > 0 {
+            debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Cmd);
+            let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
+
+            if non_opt_cmd.len() > 0 {
+                let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+                for non_opt in non_opt_cmd {
+                    cp.app_ctx(non_opt);
+                }
+                self.publish(cp).await?;
+            }
+
+            debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Pos);
+            for index in 1 ..= noa_total {
+                let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
+
+                if non_opt_pos.len() > 0  {
+                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+                    for non_opt in non_opt_pos {
+                        cp.app_ctx(non_opt);
+                    }
+                    self.publish(cp).await?;
+                }
+            }
+        }
+
+        self.check_nonopt()?;
+
+        debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Main);
+        let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
+
+        if non_opt_main.len() > 0 {
+            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+            for main in non_opt_main {
+                cp.app_ctx(main);
+            }
+            self.publish(cp).await?;
+        }
+
+        self.check_other()?;
+
+        Ok(Some(true))
+    }
+
     fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>) {
         self.msg_id_gen = id_generator;
     }
@@ -266,7 +411,9 @@ impl Parser for ForwardParser {
     }
 }
 
+#[async_trait(?Send)]
 impl Publisher<Box<dyn Proc>> for ForwardParser {
+    #[cfg(not(feature="async"))]
     fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
         let mut proc = msg;
 
@@ -285,6 +432,39 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
                     
                     opt.set_need_invoke(false);
                     self.invoke_callback(&id, callback_type)?;
+                }
+            }
+            if proc.is_matched() {
+                debug!("Proc<{:?}> Matched", proc.id());
+                break;
+            }
+        }
+        if proc.is_matched() && proc.is_need_argument() {
+            self.set_argument_matched();
+        }
+
+        Ok(proc.is_matched())
+    }
+
+    #[cfg(feature="async")]
+    async fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+        let mut proc = msg;
+
+        debug!("Receive msg<{:?}> => {:?}", &proc.id(), &proc);
+
+        for index in 0 .. self.cached_infos.len() {
+            let info = self.cached_infos.get_mut(index).unwrap();
+            let opt = self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap(); // id always exist, so just unwrap
+            let res = proc.process(opt).await?;
+            let need_invoke = opt.is_need_invoke();
+            let callback_type = opt.callback_type();
+
+            if res {
+                if need_invoke {
+                    let id = info.id();
+                    
+                    opt.set_need_invoke(false);
+                    self.invoke_callback(&id, callback_type).await?;
                 }
             }
             if proc.is_matched() {
@@ -350,6 +530,7 @@ impl DelayParser {
         self.value_mapper.insert(id, value);
     }
 
+    #[cfg(not(feature="async"))]
     pub fn invoke_callback(&mut self, id: &Identifier, callback_type: CallbackType) -> Result<bool> {
         let opt = self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap();
 
@@ -379,9 +560,42 @@ impl DelayParser {
         }
         Ok(true)
     }
+
+    #[cfg(feature="async")]
+    pub async fn invoke_callback(&mut self, id: &Identifier, callback_type: CallbackType) -> Result<bool> {
+        let opt = self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap();
+
+        if let Some(callback) = self.callbacks.get_mut(id) {
+            debug!("!!!! Calling callback of {:?}", id);
+            match callback_type {
+                CallbackType::Value => {
+                    callback.call_value(opt).await?;
+                }
+                CallbackType::Index => {
+                    let length = self.noa.len();
+                    let index = opt.index().calc_index(length as i64);
+
+                    if let Some(index) = index {
+                        let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1]).await?;
+                        // can we fix this long call?
+                        self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
+                    }
+                }
+                CallbackType::Main => {
+                    let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa).await?;
+                    // can we fix this long call?
+                    self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
+                }
+                _ => { }
+            }
+        }
+        Ok(true)
+    }
 }
 
+#[async_trait(?Send)]
 impl Parser for DelayParser {
+    #[cfg(not(feature="async"))]
     fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
         if self.set.is_none() {
             return Ok(None);
@@ -505,6 +719,130 @@ impl Parser for DelayParser {
         Ok(Some(true))
     }
 
+    #[cfg(feature="async")]
+    async fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
+        if self.set.is_none() {
+            return Ok(None);
+        }
+        let opt_order = [
+            GenStyle::GS_Delay_Equal_With_Value,
+            GenStyle::GS_Delay_Argument,
+            GenStyle::GS_Delay_Boolean,
+            GenStyle::GS_Delay_Mutliple_Option,
+            GenStyle::GS_Delay_Embedded_Value,
+        ];
+
+        debug!("---- In ForwardParser, start process option");
+        while ! iter.reach_end() {
+            let mut matched = false;
+
+            iter.fill_current_and_next();
+            self.argument_matched = false;
+            debug!("**** ArgIterator [{:?}, {:?}]", iter.current(), iter.next());
+
+            if let Ok(arg) = iter.parse(self.get_prefix()).await {
+                debug!("parse ... {:?}", arg);
+                for opt_style in &opt_order {
+                    if ! matched {
+                        let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
+
+                        if multiple_ctx.len() > 0 {
+                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+                            for ctx in multiple_ctx {
+                                cp.app_ctx(ctx);
+                            }
+
+                            matched = self.publish(cp).await?;
+                        }
+                    }
+                }
+            }
+
+            // If next argument matched, skip it
+            if matched && self.argument_matched {
+                iter.skip();
+            }
+
+            if !matched {
+                if let Some(arg) = iter.current() {
+                    self.noa.push(arg.clone());
+                }
+            }
+
+            iter.skip();
+        }
+
+        self.check_opt()?;
+
+        let noa_total = self.noa().len();
+
+        // process cmd and pos
+        if noa_total > 0 {
+            debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Cmd);
+            let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
+
+            if non_opt_cmd.len() > 0 {
+                let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+                for non_opt in non_opt_cmd {
+                    cp.app_ctx(non_opt);
+                }
+                self.publish(cp).await?;
+            }
+
+            debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Pos);
+            for index in 1 ..= noa_total {
+                let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
+
+                if non_opt_pos.len() > 0  {
+                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+                    for non_opt in non_opt_pos {
+                        cp.app_ctx(non_opt);
+                    }
+                    self.publish(cp).await? ;
+                }
+            }
+        }
+
+        // set delay value 
+        {
+            let ids: Vec<_> = self.value_mapper.keys().map(|v| v.clone()).collect();
+
+            for id in ids {
+                if let Some(x) = self.value_mapper.remove_entry(&id) {
+                    let opt = self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap();
+
+                    opt.set_value(x.1);
+                    
+                    let callback_type = opt.callback_type();
+
+                    opt.set_need_invoke(false);
+                    self.invoke_callback(&id, callback_type).await?;
+                }
+            }
+        }
+
+        self.check_nonopt()?;
+
+        debug!("---- In ForwardParser, start process {:?}", GenStyle::GS_Non_Main);
+        let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
+
+        if non_opt_main.len() > 0 {
+            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+
+            for main in non_opt_main {
+                cp.app_ctx(main);
+            }
+            self.publish(cp).await?;
+        }
+
+        self.check_other()?;
+
+        Ok(Some(true))
+    }
+
     fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>) {
         self.msg_id_gen = id_generator;
     }
@@ -553,7 +891,9 @@ impl Parser for DelayParser {
     }
 }
 
+#[async_trait(?Send)]
 impl Publisher<Box<dyn Proc>> for DelayParser {
+    #[cfg(not(feature="async"))]
     fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
         let mut proc = msg;
         let mut value_keeper: HashMap::<Identifier, OptValue> = HashMap::new();
@@ -593,6 +933,66 @@ impl Publisher<Box<dyn Proc>> for DelayParser {
                 if need_invoke {
                     opt.set_need_invoke(false);
                     self.invoke_callback(&id, callback_type)?;
+                }
+            }
+
+            if proc.is_matched() {
+                debug!("Proc<{:?}> Matched", proc.id());
+                break;
+            }
+        }
+
+        if proc.is_matched() && proc.is_need_argument() {
+            self.set_argument_matched();
+        }
+
+        for (id, value) in value_keeper {
+            self.add_delay_value(id, value);
+        }
+
+        Ok(proc.is_matched())
+    }
+
+    #[cfg(feature="async")]
+    async fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+        let mut proc = msg;
+        let mut value_keeper: HashMap::<Identifier, OptValue> = HashMap::new();
+        let mut process_id: Vec<Identifier> = vec![];
+
+        debug!("Receive msg<{:?}> => {:?}", &proc.id(), &proc);
+        
+        for index in 0 .. self.cached_infos.len() {
+            let info = self.cached_infos.get_mut(index).unwrap();
+            let opt = self.set.as_mut().unwrap().get_opt_mut(info.id()).unwrap(); // id always exist, so just unwrap
+            let res = proc.process(opt).await?;
+            let mut need_invoke = opt.is_need_invoke();
+            let callback_type = opt.callback_type();
+            let id = info.id();
+
+            if res {
+                for ctx in proc.get_ctx() {
+                    if ctx.is_matched() && !process_id.contains(&id) {
+                        let default_string = String::default();
+                        let v = ctx.get_next_argument().as_ref().unwrap_or(&default_string);
+                        let value = opt.parse_value(v.as_str())?;
+
+                        match ctx.get_style()  {
+                            Style::Argument | Style::Boolean | Style::Multiple => {
+                                value_keeper.insert(id.clone(), value);
+                                need_invoke = false;
+                            }
+                            _ => {
+                                // Set the option value if we using a delay context
+                                opt.set_value(value);
+                            }
+                        }
+                        process_id.push(id.clone());
+                        break;
+                    }
+                }
+                if need_invoke {
+                    opt.set_need_invoke(false);
+                    self.invoke_callback(&id, callback_type).await?;
                 }
             }
 

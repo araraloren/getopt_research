@@ -4,9 +4,11 @@ use crate::error::Error;
 
 use std::fmt::Debug;
 use std::iter::Iterator;
+use async_trait::async_trait;
 
 /// `IndexIterator` iterate the arguments by index.
 /// It can access [`current`](IndexIterator::current) and [`next`](IndexIterator::next) argument at same time.
+#[async_trait]
 pub trait IndexIterator : Debug {
     /// Set [`std::iter::Iterator`] of arguments.
     fn set_args(&mut self, args: &mut dyn Iterator<Item = String>);
@@ -33,7 +35,12 @@ pub trait IndexIterator : Debug {
     fn skip(&mut self);
 
     /// Parsing current argument to [`Argument`]
+    #[cfg(not(feature="async"))]
     fn parse(&self, prefixs: &Vec<String>) -> Result<Argument>;
+
+    /// Parsing current argument to [`Argument`]
+    #[cfg(feature="async")]
+    async fn parse(&self, prefixs: &Vec<String>) -> Result<Argument>;
 
     fn reset(&mut self);
 }
@@ -110,6 +117,7 @@ impl ArgIterator {
     }
 }
 
+#[async_trait]
 impl IndexIterator for ArgIterator {
     fn set_args(&mut self, args: &mut dyn std::iter::Iterator<Item = String>) {
         self.args = args.map(|s|s).collect();
@@ -150,8 +158,14 @@ impl IndexIterator for ArgIterator {
         self.index += 1;
     }
 
+    #[cfg(not(feature="async"))]
     fn parse(&self, prefixs: &Vec<String>) -> Result<Argument> {
         parse_argument(self.current(), prefixs)
+    }
+
+    #[cfg(feature="async")]
+    async fn parse(&self, prefixs: &Vec<String>) -> Result<Argument> {
+        parse_argument(self.current(), prefixs).await
     }
 
     fn reset(&mut self) {
@@ -161,8 +175,17 @@ impl IndexIterator for ArgIterator {
     }
 }
 
+#[cfg(feature="async")]
+pub async fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
+    parse_argument_impl(s, prefixs)
+}
 
+#[cfg(not(feature="async"))]
 pub fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
+    parse_argument_impl(s, prefixs)
+}
+
+fn parse_argument_impl(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
     match s {
         Some(s) => {
             const SPLIT: &'static str = "=";

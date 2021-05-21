@@ -8,5 +8,8 @@ edition = "2018"
 
 [dependencies]
 thiserror = "1.0.24"
-simplelog = "0.10.0"
 log = "0.4.14"
+async-trait = "0.1"
+
+[features]
+async = []

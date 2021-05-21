@@ -1,5 +1,6 @@
 
 use std::fmt::Debug;
+use async_trait::async_trait;
 
 use crate::error::Result;
 use crate::opt::Opt;
@@ -14,7 +15,12 @@ pub trait Info: Debug {
     fn id(&self) -> Identifier;
 }
 
+#[async_trait(?Send)]
 pub trait Publisher<M: Message> {
+    #[cfg(feature="async")]
+    async fn publish(&mut self, msg: M) -> Result<bool>;
+
+    #[cfg(not(feature="async"))]
     fn publish(&mut self, msg: M) -> Result<bool>;
 
     fn reg_subscriber(&mut self, info: Box<dyn Info>);
@@ -26,6 +32,7 @@ pub trait Subscriber {
     fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>);
 }
 
+#[async_trait(?Send)]
 pub trait Proc: Debug {
     fn id(&self) -> Identifier;
 
@@ -36,7 +43,12 @@ pub trait Proc: Debug {
     fn get_ctx(&self) -> &Vec<Box<dyn Context>>;
 
     /// Process the option
+    #[cfg(not(feature="async"))]
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
+
+    /// Process the option
+    #[cfg(feature="async")]
+    async fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
 
     /// If the matched option need argument
     fn is_need_argument(&self) -> bool;
@@ -72,6 +84,7 @@ impl SequenceProc {
     }
 }
 
+#[async_trait(?Send)]
 impl Proc for SequenceProc {
     fn id(&self) -> Identifier {
         self.id
@@ -85,7 +98,29 @@ impl Proc for SequenceProc {
         &self.contexts
     }
 
+    #[cfg(not(feature="async"))]
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
+        if self.is_matched() {
+            debug!("Skip process {:?}, it matched", self.id());
+            return Ok(true);
+        }
+        let mut matched = false;
+
+        self.need_argument = false;
+        for ctx in self.contexts.iter_mut() {
+            if ! ctx.is_matched() {
+                if ctx.match_opt(opt) {
+                    ctx.process(opt)?;
+                    self.need_argument = self.need_argument || ctx.is_need_argument();
+                    matched = true;
+                }
+            }
+        }
+        Ok(matched)
+    }
+
+    #[cfg(feature="async")]
+    async fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
         if self.is_matched() {
             debug!("Skip process {:?}, it matched", self.id());
             return Ok(true);
