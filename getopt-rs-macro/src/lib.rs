@@ -85,7 +85,7 @@ pub fn getopt(input: TokenStream) -> TokenStream {
 
     let ret = quote! {{
         #getopt_init
-        getopt_impl(#iterator, parsers);
+        getopt_impl(#iterator, parsers)
     }};
     ret.into()
 }

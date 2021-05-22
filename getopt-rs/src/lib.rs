@@ -26,6 +26,39 @@ pub mod prelude {
     pub use crate::id::IdGenerator;
     pub use crate::id::DefaultIdGen;
     pub use crate::getopt_impl;
+    
+    /// getopt will set do the previous work for you,
+    /// and call the getopt_impl.
+    /// 
+    /// For example,
+    /// the `ai` is an instance of [`ArgIterator`].
+    /// The `parser` is an instance of [`Parser`].
+    /// And `set` is an instance of [`Set`].
+    /// 
+    /// `getopt(ai, parser, set)` will expand to 
+    /// ```ignore
+    /// {
+    ///     let mut parsers: Vec<Box<dyn Parser>> = ::alloc::vec::Vec::new();
+    ///     set.subscribe_from(&mut parser);
+    ///     parser.publish_to(Box::new(set));
+    ///     parsers.push(Box::new(parser));
+    ///     getopt_impl(&mut ai, parsers)
+    /// }
+    /// ```
+    /// 
+    /// `getopt(ai, parser1, set1, parser2, set2)` will expand to 
+    /// ```ignore
+    /// {
+    ///     let mut parsers: Vec<Box<dyn Parser>> = ::alloc::vec::Vec::new();
+    ///     set1.subscribe_from(&mut parser1);
+    ///     parser1.publish_to(Box::new(set1));
+    ///     parsers.push(Box::new(parser1));
+    ///     set2.subscribe_from(&mut parser2);
+    ///     parser2.publish_to(Box::new(set2));
+    ///     parsers.push(Box::new(parser2));
+    ///     getopt_impl(&mut ai, parsers)
+    /// }
+    /// ```
     pub use getopt_rs_macro::getopt;
 }
 
