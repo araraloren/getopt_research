@@ -65,7 +65,7 @@ pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut
     /// Create and return an [`Commit`] using the `opt`, return Err if the `opt` is invlaid.
     fn add_opt(&mut self, opt: &str) -> Result<Commit>;
 
-    /// Create and add an option using the given [`Createinfo`], return Err if create failed.
+    /// Create and add an option using the given [`CreateInfo`], return Err if create failed.
     fn add_opt_ci(&mut self, ci: &CreateInfo) -> Result<Identifier>;
 
     /// Add the option to the Set, return the new [`Identifier`].
