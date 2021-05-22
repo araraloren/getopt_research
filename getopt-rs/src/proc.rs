@@ -15,6 +15,7 @@ pub trait Info: Debug {
     fn id(&self) -> Identifier;
 }
 
+/// Publisher is the collection of [`Subscriber`].
 #[async_trait(?Send)]
 pub trait Publisher<M: Message> {
     #[cfg(feature="async")]
@@ -32,6 +33,7 @@ pub trait Subscriber {
     fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>);
 }
 
+/// Proc hold and process the [`Context`] created by [`Parser`](crate::parser::Parser).
 #[async_trait(?Send)]
 pub trait Proc: Debug {
     fn id(&self) -> Identifier;
@@ -63,8 +65,8 @@ impl Message for Box<dyn Proc> {
     }
 }
 
-/// Default `Proc`, it will match every `Context` with given `Opt`.
-/// It will call `Contex::process` on the `Opt` if matched.
+/// Default [`Proc`], it will match every [`Context`] with given [`Opt`].
+/// It will call [`Context::process`] on the [`Opt`] if matched.
 #[derive(Debug)]
 pub struct SequenceProc {
     id: Identifier,

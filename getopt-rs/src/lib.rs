@@ -25,6 +25,7 @@ pub mod prelude {
     pub use crate::arg::ArgIterator;
     pub use crate::id::IdGenerator;
     pub use crate::id::DefaultIdGen;
+    pub use crate::getopt_impl;
 }
 
 use prelude::*;

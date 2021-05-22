@@ -20,6 +20,8 @@ use getopt_rs::error::Result;
 use simplelog::*;
 use std::sync::Arc;
 use std::sync::Mutex;
+use getopt_rs_macro::getopt;
+use getopt_rs::getopt_impl;
 
 #[async_std::main]
 async fn main() {
@@ -154,14 +156,14 @@ fn example3() {
             ))));
     }
 
-    set.subscribe_from(&mut parser);
-    parser.publish_to(Box::new(set));
+    // set.subscribe_from(&mut parser);
+    // parser.publish_to(Box::new(set));
 
     let mut ai: ArgIterator = ArgIterator::new();
 
     ai.set_args(&mut std::env::args().skip(1));
 
-    parser.parse(&mut ai);
+    getopt!(ai, parser, set);
 }
 
 
