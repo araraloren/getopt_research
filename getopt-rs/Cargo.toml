@@ -14,3 +14,4 @@ getopt-rs-macro = { path = "../getopt-rs-macro", features = [ ] }
 
 [features]
 async = []
+

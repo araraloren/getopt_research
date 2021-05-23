@@ -211,11 +211,15 @@ impl IndexIterator for ArgIterator {
     }
 }
 
+/// Parsing the string to [`Argument`].
+/// The given `prefixs` need be sorted by length in descending order.
 #[cfg(feature="async")]
 pub async fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
     parse_argument_impl(s, prefixs)
 }
 
+/// Parsing the string to [`Argument`].
+/// The given `prefixs` need be sorted by length in descending order.
 #[cfg(not(feature="async"))]
 pub fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
     parse_argument_impl(s, prefixs)
