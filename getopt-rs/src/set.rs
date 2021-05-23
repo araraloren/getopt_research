@@ -1,4 +1,3 @@
-
 use std::fmt::Debug;
 use std::slice::Iter;
 use std::slice::IterMut;
@@ -28,57 +27,102 @@ use crate::utils::Utils;
 use crate::utils::CreateInfo;
 use crate::utils::FilterInfo;
 
+/// Set is a option/non-option collections.
+/// ```no_run
+/// use getopt_rs::set::DefaultSet;
+/// use getopt_rs::set::Set;
+/// use getopt_rs::opt::int::IntUtils;
+///  
+/// let mut set = DefaultSet::new();
+/// 
+/// // before you add option, you need add Utils
+/// set.add_utils(Box::new(IntUtils::new())).unwrap();
+/// // also you need set all the prefix of options
+/// set.app_prefix(String::from("--"));
+/// set.app_prefix(String::from("-"));
+/// 
+/// // get an option commit
+/// if let Ok(mut commit) = set.add_opt("--opt=int") {
+///     commit.add_alias("-", "o");
+///     // if everything is ok, commit the option
+///     commit.commit();
+/// }
+/// ```
 pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut<Identifier> {
+    /// Add an [`Utils`] to the Set, return Err if the [`Utils`]'s name exist.
     fn add_utils(&mut self, utils: Box<dyn Utils>) -> Result<bool>;
 
+    /// Append all the [`Utils`] to the Set, return Err if any [`Utils`]'s name exist.
     fn app_utils(&mut self, utils: Vec<Box<dyn Utils>>) -> Result<bool>;
 
+    /// Remove the given [`Utils`] from the Set, return Err if the name not exist.
     fn rem_utils(&mut self, type_name: &str) -> Result<bool>;
 
+    /// Get an [`Utils`] from the Set, return None if the name not exist.
     fn get_utils(&self, type_name: &str) -> Option<& dyn Utils>;
 
     
+    /// Create and return an [`Commit`] using the `opt`, return Err if the `opt` is invlaid.
     fn add_opt(&mut self, opt: &str) -> Result<Commit>;
 
+    /// Create and add an option using the given [`CreateInfo`], return Err if create failed.
     fn add_opt_ci(&mut self, ci: &CreateInfo) -> Result<Identifier>;
 
+    /// Add the option to the Set, return the new [`Identifier`].
     fn add_opt_raw(&mut self, opt: Box<dyn Opt>) -> Result<Identifier>;
 
     
+    /// Return the option reference if the `id` exist, otherwise return None.
     fn get_opt(&self, id: Identifier) -> Option<& dyn Opt>;
 
+    /// Return the option mutable reference if the `id` exist, otherwise return None.
     fn get_opt_mut(&mut self, id: Identifier) -> Option<&mut dyn Opt>;
 
+    /// Return the option reference if the index exist, otherwise return None.
     fn get_opt_i(&self, index: usize) -> Option<& dyn Opt>;
 
+    /// Return the option mutable reference if the index exist, otherwise return None.
     fn get_opt_mut_i(&mut self, index: usize) -> Option<&mut dyn Opt>;
 
+    /// Return the number of option.
     fn len(&self) -> usize;
 
 
+    /// Create and return an [`Filter`] using the `opt`, return Err if the `opt` is invalid.
     fn filter(&self, opt: &str) -> Result<Filter>;
 
+    /// Create and return an [`FilterMut`] using the `opt`, return Err if the `opt` is invalid.
     fn filter_mut(&mut self, opt: &str) -> Result<FilterMut>;
     
+    /// Return the first option reference match the [`FilterInfo`], return None if no option matched.
     fn find(&self, fi: &FilterInfo) -> Option<&dyn Opt>;
 
-    fn find_all(&self, fi: &FilterInfo) -> Vec<Option<&dyn Opt>>;
+    /// Return all the option reference match the [`FilterInfo`].
+    fn find_all(&self, fi: &FilterInfo) -> Vec<&dyn Opt>;
 
+    /// Return the first option mutable reference match the [`FilterInfo`], return None if no option matched.
     fn find_mut(&mut self, fi: &FilterInfo) -> Option<&mut dyn Opt>;
 
-    fn find_all_mut(&mut self, fi: &FilterInfo) -> Vec<Option<&mut dyn Opt>>;
+    /// Return all the option mutable reference match the [`FilterInfo`].
+    fn find_all_mut(&mut self, fi: &FilterInfo) -> Vec<&mut dyn Opt>;
 
     
+    /// Return an iterator over the Set.
     fn iter(&self) -> Iter<Box<dyn Opt>>;
 
+    /// Return an mutable iterator over the Set.
     fn iter_mut(&mut self) -> IterMut<Box<dyn Opt>>;
 
+    /// Set the option prefix before add the option.
     fn set_prefix(&mut self, prefixs: Vec<String>);
 
+    /// Get the supported prefixs of the Set.
     fn get_prefix(&self) -> &Vec<String>;
 
+    /// Append an prefix to the Set.
     fn app_prefix(&mut self, prefix: String);
 
+    /// Check if the Set's options are invalid.
     fn check(&self) -> Result<bool>;
 
     fn reset(&mut self);
@@ -249,12 +293,12 @@ impl Set for DefaultSet {
         None
     }
 
-    fn find_all(&self, fi: &FilterInfo) -> Vec<Option<&dyn Opt>> {
+    fn find_all(&self, fi: &FilterInfo) -> Vec<&dyn Opt> {
         let mut opts = vec![];
 
         for opt in self.opts.iter() {
             if fi.match_opt(opt.as_ref()) {
-                opts.push(Some(opt.as_ref()))
+                opts.push(opt.as_ref())
             }
         }
         opts
@@ -269,12 +313,12 @@ impl Set for DefaultSet {
         None
     }
 
-    fn find_all_mut(&mut self, fi: &FilterInfo) -> Vec<Option<&mut dyn Opt>> {
-        let mut opts: Vec<Option<&mut dyn Opt>> = vec![];
+    fn find_all_mut(&mut self, fi: &FilterInfo) -> Vec<&mut dyn Opt> {
+        let mut opts: Vec<&mut dyn Opt> = vec![];
 
         for opt in self.opts.iter_mut() {
             if fi.match_opt(opt.as_ref()) {
-                opts.push(Some(opt.as_mut()))
+                opts.push(opt.as_mut())
             }
         }
         opts
@@ -436,7 +480,7 @@ impl<'a> Filter<'a> {
         self.ref_set.find(&self.filter_info)
     }
 
-    pub fn find_all(&self) -> Vec<Option<&dyn Opt>> {
+    pub fn find_all(&self) -> Vec<&dyn Opt> {
         self.ref_set.find_all(&self.filter_info)
     }
 }
@@ -484,7 +528,7 @@ impl<'a> FilterMut<'a> {
         self.ref_set.find_mut(&self.filter_info)
     }
 
-    pub fn find_all(&mut self) -> Vec<Option<&mut dyn Opt>> {
+    pub fn find_all(&mut self) -> Vec<&mut dyn Opt> {
         self.ref_set.find_all_mut(&self.filter_info)
     }
 }

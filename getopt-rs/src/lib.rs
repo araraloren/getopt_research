@@ -1,4 +1,3 @@
-
 pub mod id;
 pub mod error;
 pub mod callback;
@@ -13,8 +12,8 @@ pub mod nonopt;
 
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate maybe_async;
+
+extern crate async_trait;
 
 pub mod prelude {
     pub use crate::set::Set;
@@ -25,53 +24,77 @@ pub mod prelude {
     pub use crate::arg::ArgIterator;
     pub use crate::id::IdGenerator;
     pub use crate::id::DefaultIdGen;
+    pub use crate::getopt_impl;
+    
+    /// getopt will set do the previous work for you,
+    /// and call the getopt_impl.
+    /// 
+    /// For example,
+    /// the `ai` is an instance of [`ArgIterator`].
+    /// The `parser` is an instance of [`Parser`].
+    /// And `set` is an instance of [`Set`].
+    /// 
+    /// `getopt(ai, parser, set)` will expand to 
+    /// ```ignore
+    /// {
+    ///     let mut parsers: Vec<Box<dyn Parser>> = ::alloc::vec::Vec::new();
+    ///     set.subscribe_from(&mut parser);
+    ///     parser.publish_to(Box::new(set));
+    ///     parsers.push(Box::new(parser));
+    ///     getopt_impl(&mut ai, parsers)
+    /// }
+    /// ```
+    /// 
+    /// `getopt(ai, parser1, set1, parser2, set2)` will expand to 
+    /// ```ignore
+    /// {
+    ///     let mut parsers: Vec<Box<dyn Parser>> = ::alloc::vec::Vec::new();
+    ///     set1.subscribe_from(&mut parser1);
+    ///     parser1.publish_to(Box::new(set1));
+    ///     parsers.push(Box::new(parser1));
+    ///     set2.subscribe_from(&mut parser2);
+    ///     parser2.publish_to(Box::new(set2));
+    ///     parsers.push(Box::new(parser2));
+    ///     getopt_impl(&mut ai, parsers)
+    /// }
+    /// ```
+    pub use getopt_rs_macro::getopt;
 }
 
 use prelude::*;
 
-#[macro_export]
-macro_rules! getopt {
-    ( $( $parser:ident ),+ ) => {{
-        use getopt_rs::getopt_impl;
-        use getopt_rs::arg::IndexIterator;
-        use getopt_rs::arg::ArgIterator;
-
-        let parsers: Vec<Box<dyn Parser>>  = vec![ $( Box::new($parser) ),+ ];
-        let mut iter = ArgIterator::new();
-
-        iter.set_args(&mut std::env::args().skip(1));
-        getopt_impl(&mut iter, parsers)
-    }};
-
-    ( $iter:expr, $( $parser:ident ),+ ) => {{
-        use getopt_rs::getopt_impl;
-
-        let parsers: Vec<Box<dyn Parser>>  = vec![ $( Box::new($parser) ),+ ];
-
-        getopt_impl($iter, parsers)
-    }};
-}
-
-#[maybe_async::maybe_async]
-pub async fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser>>) -> Option<Box<dyn Parser>> {
+#[cfg(not(feature="async"))]
+pub fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser>>) -> Result<Option<Box<dyn Parser>>> {
     for mut parser in parsers {
-        match parser.parse(iter).await {
-            Ok(ret) => {
-                if let Some(ret) = ret {
-                    if ret {
-                        return Some(parser);
-                    }
-                    else {
-                        iter.reset();
-                    }
-                }
+        let ret = parser.parse(iter)?;
+
+        if let Some(ret) = ret {
+            if ret {
+                return Ok(Some(parser));
             }
-            Err(e) => {
-                error!("CATCH {:?}", e);
+            else {
+                iter.reset();
             }
         }
     }
-    None
+    Ok(None)
+}
+
+#[cfg(feature="async")]
+pub async fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser>>) -> Result<Option<Box<dyn Parser>>> {
+    for mut parser in parsers {
+        let ret = parser.parse(iter).await?;
+
+        if let Some(ret) = ret {
+            if ret {
+                return Ok(Some(parser));
+            }
+            else {
+                iter.reset();
+            }
+        }
+    }
+    Ok(None)
 }
 
 pub fn create_idgenerator(id: u64) -> Box<dyn IdGenerator>  {

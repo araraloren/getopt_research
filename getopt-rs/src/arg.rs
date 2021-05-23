@@ -4,10 +4,47 @@ use crate::error::Error;
 
 use std::fmt::Debug;
 use std::iter::Iterator;
+use async_trait::async_trait;
 
 /// `IndexIterator` iterate the arguments by index.
 /// It can access [`current`](IndexIterator::current) and [`next`](IndexIterator::next) argument at same time.
-#[maybe_async::maybe_async(?Send)]
+/// ```no_run
+/// use getopt_rs::arg::ArgIterator;
+/// use getopt_rs::arg::IndexIterator;
+/// 
+/// let mut ai = ArgIterator::new();
+/// 
+/// ai.set_args(&mut [
+///     "foo",
+///     "--foo",
+///     "bar",
+///     "--bar",
+///     "end"
+/// ].iter().map(|&v|String::from(v)));
+/// 
+/// assert_eq!(ai.count(), 5);
+/// 
+/// assert!(!ai.reach_end());
+/// ai.fill_current_and_next();
+/// assert_eq!(ai.current_index(), 0);
+/// assert_eq!(ai.current(), &Some(String::from("foo")));
+/// assert_eq!(ai.next(), &Some(String::from("--foo")));
+/// ai.skip();
+/// ai.skip();
+/// ai.skip();
+/// assert!(!ai.reach_end());
+/// ai.fill_current_and_next();
+/// assert_eq!(ai.current_index(), 3);
+/// assert_eq!(ai.current(), &Some(String::from("--bar")));
+/// assert_eq!(ai.next(), &Some(String::from("end")));
+/// ai.skip();
+/// ai.fill_current_and_next();
+/// assert_eq!(ai.current(), &Some(String::from("end")));
+/// assert_eq!(ai.next(), &None);
+/// ai.skip();
+/// assert!(ai.reach_end());
+/// ``` 
+#[async_trait]
 pub trait IndexIterator : Debug {
     /// Set [`std::iter::Iterator`] of arguments.
     fn set_args(&mut self, args: &mut dyn Iterator<Item = String>);
@@ -34,6 +71,11 @@ pub trait IndexIterator : Debug {
     fn skip(&mut self);
 
     /// Parsing current argument to [`Argument`]
+    #[cfg(not(feature="async"))]
+    fn parse(&self, prefixs: &Vec<String>) -> Result<Argument>;
+
+    /// Parsing current argument to [`Argument`]
+    #[cfg(feature="async")]
     async fn parse(&self, prefixs: &Vec<String>) -> Result<Argument>;
 
     fn reset(&mut self);
@@ -111,7 +153,7 @@ impl ArgIterator {
     }
 }
 
-#[maybe_async::maybe_async(?Send)]
+#[async_trait]
 impl IndexIterator for ArgIterator {
     fn set_args(&mut self, args: &mut dyn std::iter::Iterator<Item = String>) {
         self.args = args.map(|s|s).collect();
@@ -152,6 +194,12 @@ impl IndexIterator for ArgIterator {
         self.index += 1;
     }
 
+    #[cfg(not(feature="async"))]
+    fn parse(&self, prefixs: &Vec<String>) -> Result<Argument> {
+        parse_argument(self.current(), prefixs)
+    }
+
+    #[cfg(feature="async")]
     async fn parse(&self, prefixs: &Vec<String>) -> Result<Argument> {
         parse_argument(self.current(), prefixs).await
     }
@@ -165,8 +213,19 @@ impl IndexIterator for ArgIterator {
 
 /// Parsing the string to [`Argument`].
 /// The given `prefixs` need be sorted by length in descending order.
-#[maybe_async::maybe_async]
+#[cfg(feature="async")]
 pub async fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
+    parse_argument_impl(s, prefixs)
+}
+
+/// Parsing the string to [`Argument`].
+/// The given `prefixs` need be sorted by length in descending order.
+#[cfg(not(feature="async"))]
+pub fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
+    parse_argument_impl(s, prefixs)
+}
+
+fn parse_argument_impl(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
     match s {
         Some(s) => {
             const SPLIT: &'static str = "=";

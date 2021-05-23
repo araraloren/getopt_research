@@ -9,5 +9,9 @@ edition = "2018"
 [dependencies]
 thiserror = "1.0.24"
 log = "0.4.14"
-maybe-async = "0.2.4"
 async-trait = "0.1"
+getopt-rs-macro = { path = "../getopt-rs-macro", features = [ ] }
+
+[features]
+async = []
+

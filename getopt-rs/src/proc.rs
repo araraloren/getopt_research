@@ -1,5 +1,6 @@
 
 use std::fmt::Debug;
+use async_trait::async_trait;
 
 use crate::error::Result;
 use crate::opt::Opt;
@@ -14,9 +15,14 @@ pub trait Info: Debug {
     fn id(&self) -> Identifier;
 }
 
-#[maybe_async::maybe_async(?Send)]
+/// Publisher is the collection of [`Subscriber`].
+#[async_trait(?Send)]
 pub trait Publisher<M: Message> {
+    #[cfg(feature="async")]
     async fn publish(&mut self, msg: M) -> Result<bool>;
+
+    #[cfg(not(feature="async"))]
+    fn publish(&mut self, msg: M) -> Result<bool>;
 
     fn reg_subscriber(&mut self, info: Box<dyn Info>);
 
@@ -27,7 +33,8 @@ pub trait Subscriber {
     fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>);
 }
 
-#[maybe_async::maybe_async(?Send)]
+/// Proc hold and process the [`Context`] created by [`Parser`](crate::parser::Parser).
+#[async_trait(?Send)]
 pub trait Proc: Debug {
     fn id(&self) -> Identifier;
 
@@ -38,6 +45,11 @@ pub trait Proc: Debug {
     fn get_ctx(&self) -> &Vec<Box<dyn Context>>;
 
     /// Process the option
+    #[cfg(not(feature="async"))]
+    fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
+
+    /// Process the option
+    #[cfg(feature="async")]
     async fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
 
     /// If the matched option need argument
@@ -53,8 +65,8 @@ impl Message for Box<dyn Proc> {
     }
 }
 
-/// Default `Proc`, it will match every `Context` with given `Opt`.
-/// It will call `Contex::process` on the `Opt` if matched.
+/// Default [`Proc`], it will match every [`Context`] with given [`Opt`].
+/// It will call [`Context::process`] on the [`Opt`] if matched.
 #[derive(Debug)]
 pub struct SequenceProc {
     id: Identifier,
@@ -74,7 +86,7 @@ impl SequenceProc {
     }
 }
 
-#[maybe_async::maybe_async(?Send)]
+#[async_trait(?Send)]
 impl Proc for SequenceProc {
     fn id(&self) -> Identifier {
         self.id
@@ -88,6 +100,28 @@ impl Proc for SequenceProc {
         &self.contexts
     }
 
+    #[cfg(not(feature="async"))]
+    fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
+        if self.is_matched() {
+            debug!("Skip process {:?}, it matched", self.id());
+            return Ok(true);
+        }
+        let mut matched = false;
+
+        self.need_argument = false;
+        for ctx in self.contexts.iter_mut() {
+            if ! ctx.is_matched() {
+                if ctx.match_opt(opt) {
+                    ctx.process(opt)?;
+                    self.need_argument = self.need_argument || ctx.is_need_argument();
+                    matched = true;
+                }
+            }
+        }
+        Ok(matched)
+    }
+
+    #[cfg(feature="async")]
     async fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
         if self.is_matched() {
             debug!("Skip process {:?}, it matched", self.id());

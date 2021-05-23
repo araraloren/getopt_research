@@ -1,0 +1,18 @@
+[package]
+name = "getopt-rs-macro"
+version = "0.1.0"
+authors = ["lance"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+syn = { version = "1.0", features = [ "extra-traits", "full" ] }
+proc-macro2 = "1.0"
+quote = "1.0"
+
+[lib]
+proc-macro = true
+
+[features]
+async = []
