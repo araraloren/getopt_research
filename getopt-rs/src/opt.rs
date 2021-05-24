@@ -608,6 +608,31 @@ pub trait Index {
     fn match_index(&self, total: i64, current: i64) -> bool;
 }
 
+
+/// The help interface using for generate usage.
+pub trait Help {
+    /// The hint of option.
+    /// For example, for option `--source=str`, you can set it as `[--source=path]`.
+    /// In default the hint will be `[--source=str]`.
+    fn hint(&self) -> &str;
+
+    fn help(&self) -> &str;
+    
+    fn set_hint(&mut self, hint: &str);
+
+    fn set_help(&mut self, help: &str);
+
+    fn help_info(&self) -> HelpInfo;
+}
+
+/// HelpInfo using for generate usage.
+#[derive(Debug)]
+pub struct HelpInfo {
+    pub hint: String,
+
+    pub help: String,
+}
+
 /// The option trait type, you need implement follow traits:
 /// 
 /// * [`Type`]
@@ -618,7 +643,7 @@ pub trait Index {
 /// * [`Value`]
 /// * [`Index`]
 /// * [`Callback`]
-pub trait Opt: Type + Identifier + Name + Alias + Optional + Value + Index + Callback + Debug { }
+pub trait Opt: Type + Identifier + Name + Alias + Optional + Value + Index + Callback + Help + Debug { }
 
 /// Helper function clone the any value
 pub struct CloneHelper(Box< dyn Fn (&dyn Any) -> Box<dyn Any>>);
@@ -1628,6 +1653,94 @@ macro_rules! opt_index_def {
                     return realindex == 0 || realindex == current;
                 }
                 false
+            }
+        }
+    );
+}
+
+/// Create a `Help` implementation for type `$opt`.
+/// 
+/// For example,
+/// ```no_run
+/// use getopt_rs::opt::*;
+/// use getopt_rs::id;
+/// 
+/// #[derive(Debug)]
+/// pub struct StrOpt {
+///     id: id::Identifier,
+///
+///     name: String,
+///
+///     prefix: String,
+///
+///     optional: bool,
+///
+///     value: OptValue,
+///
+///     alias: Vec<String>,
+/// 
+///     hint: String,
+/// 
+///     help: String,
+/// }
+/// 
+/// // `opt_help_def!(StrOpt, hint, help, hint_para, help_para)` will expand to
+/// 
+/// impl Help for StrOpt {
+///     fn hint(&self) -> &str {
+///         &self.hint
+///     }
+/// 
+///     fn help(&self) -> &str {
+///        &&self.help
+///     }
+/// 
+///     fn set_hint(&mut self, hint_para: &str) {
+///         self.hint = hint_para.to_owned()
+///     }
+///
+///     fn set_help(&mut self, help_para: &str) {
+///         self.help = help_para.to_owned()
+///     }
+///
+///     fn help_info(&self) -> HelpInfo {
+///         HelpInfo {
+///             hint: self.hint.clone(),
+///             help: self.help.clone(),
+///         }
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! opt_help_def {
+    ($opt:ty,
+     $hint:ident,
+     $help:ident,
+     $hint_para:ident,
+     $help_para:ident,
+    ) => (
+        impl Help for $opt {
+            fn hint(&self) -> &str {
+                &self.$hint
+            }
+
+            fn help(&self) -> &str {
+                &self.$help
+            }
+            
+            fn set_hint(&mut self, $hint_para: &str) {
+                self.$hint = $hint_para.to_owned()
+            }
+
+            fn set_help(&mut self, $help_para: &str) {
+                self.$help = $help_para.to_owned()
+            }
+
+            fn help_info(&self) -> HelpInfo {
+                HelpInfo {
+                    hint: self.$hint.clone(),
+                    help: self.$help.clone(),
+                }
             }
         }
     );
