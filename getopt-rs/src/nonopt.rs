@@ -54,10 +54,12 @@ pub mod pos {
         callback: CallbackType,
 
         default_value: OptValue,
+
+        help: HelpInfo,
     }
 
     impl PosNonOpt {
-        pub fn new(id: IIdentifier, name: String, optional: bool, index: NonOptIndex) -> Self {
+        pub fn new(id: IIdentifier, name: String, optional: bool, index: NonOptIndex, help: HelpInfo) -> Self {
             Self {
                 id,
                 name,
@@ -66,6 +68,7 @@ pub mod pos {
                 index,
                 default_value: OptValue::default(),
                 callback: CallbackType::default(),
+                help,
             }
         }
     }
@@ -132,6 +135,20 @@ pub mod pos {
         index,
         index,
     );
+
+    impl Help for PosNonOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
 
     /// Pos using value hold the return value of callback
     impl Value for PosNonOpt {
@@ -212,6 +229,7 @@ pub mod pos {
                 ci.get_name().to_owned(),
                 ci.is_optional(),
                 ci.get_index().clone(),
+                ci.get_help_info().clone(),
             ));
 
             Ok(opt)
@@ -260,10 +278,12 @@ pub mod cmd {
         callback: CallbackType,
 
         default_value: OptValue,
+
+        help: HelpInfo,
     }
 
     impl CmdNonOpt {
-        pub fn new(id: IIdentifier, name: String) -> Self {
+        pub fn new(id: IIdentifier, name: String, help: HelpInfo,) -> Self {
             Self {
                 id,
                 name,
@@ -272,6 +292,7 @@ pub mod cmd {
                 index: NonOptIndex::new(1), // Cmd is the first noa
                 callback: CallbackType::default(),
                 default_value: OptValue::default(),
+                help,
             }
         }
     }
@@ -335,6 +356,20 @@ pub mod cmd {
                 return realindex == current;
             }
             false
+        }
+    }
+
+    impl Help for CmdNonOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
         }
     }
 
@@ -415,6 +450,7 @@ pub mod cmd {
             let opt = Box::new(CmdNonOpt::new(
                 id,
                 ci.get_name().to_owned(),
+                ci.get_help_info().clone(),
             ));
 
             Ok(opt)
@@ -463,10 +499,12 @@ pub mod main {
         callback: CallbackType,
 
         default_value: OptValue,
+
+        help: HelpInfo,
     }
 
     impl MainNonOpt {
-        pub fn new(id: IIdentifier, name: String) -> Self {
+        pub fn new(id: IIdentifier, name: String, help: HelpInfo) -> Self {
             Self {
                 id,
                 name,
@@ -475,6 +513,7 @@ pub mod main {
                 index: NonOptIndex::default(), // Cmd is the first noa
                 callback: CallbackType::default(),
                 default_value: OptValue::default(),
+                help,
             }
         }
     }
@@ -559,6 +598,20 @@ pub mod main {
         }
     }
 
+    impl Help for MainNonOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
+
     /// Pos using value hold the return value of callback
     impl Value for MainNonOpt {
         fn value(&self) -> &OptValue {
@@ -635,7 +688,8 @@ pub mod main {
 
             let opt = Box::new(MainNonOpt::new(
                 id,
-                ci.get_name().to_owned()
+                ci.get_name().to_owned(),
+                ci.get_help_info().clone(),
             ));
 
             Ok(opt)

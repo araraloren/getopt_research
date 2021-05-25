@@ -614,10 +614,6 @@ pub trait Help {
     /// The hint of option.
     /// For example, for option `--source=str`, you can set it as `[--source=path]`.
     /// In default the hint will be `[--source=str]`.
-    fn hint(&self) -> &str;
-
-    fn help(&self) -> &str;
-    
     fn set_hint(&mut self, hint: &str);
 
     fn set_help(&mut self, help: &str);
@@ -626,7 +622,7 @@ pub trait Help {
 }
 
 /// HelpInfo using for generate usage.
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct HelpInfo {
     pub hint: String,
 
@@ -643,6 +639,7 @@ pub struct HelpInfo {
 /// * [`Value`]
 /// * [`Index`]
 /// * [`Callback`]
+/// * [`Help`]
 pub trait Opt: Type + Identifier + Name + Alias + Optional + Value + Index + Callback + Help + Debug { }
 
 /// Helper function clone the any value
@@ -653,6 +650,44 @@ impl Debug for CloneHelper {
         f.debug_struct("AnyCloneHelper")
          .field("Fn", &String::from("..."))
          .finish()
+    }
+}
+
+impl HelpInfo {
+    pub fn new1(hint: &str, help: &str) -> Self {
+        Self {
+            hint: hint.to_owned(),
+            help: help.to_owned(),
+        }
+    }
+
+    pub fn new2(prefix: &str, name: &str, type_name: &str, optional: bool, help: &str) -> Self {
+        Self {
+            help: help.to_owned(),
+            hint: format!(
+                "{}{}{}={}{}",
+                if optional { "[" } else { "<" },
+                prefix,
+                name,
+                type_name,
+                if optional { "]" } else { ">" },
+            ),
+        }
+    }
+
+    pub fn clone_or(&self, opt: &dyn Opt) -> Self {
+        if self.hint.is_empty() {
+            Self::new2(
+                opt.prefix(),
+                opt.name(),
+                opt.type_name(),
+                opt.optional(),
+                self.help.as_str(),
+            )
+        }
+        else {
+            self.clone()
+        }
     }
 }
 
@@ -1658,94 +1693,6 @@ macro_rules! opt_index_def {
     );
 }
 
-/// Create a `Help` implementation for type `$opt`.
-/// 
-/// For example,
-/// ```no_run
-/// use getopt_rs::opt::*;
-/// use getopt_rs::id;
-/// 
-/// #[derive(Debug)]
-/// pub struct StrOpt {
-///     id: id::Identifier,
-///
-///     name: String,
-///
-///     prefix: String,
-///
-///     optional: bool,
-///
-///     value: OptValue,
-///
-///     alias: Vec<String>,
-/// 
-///     hint: String,
-/// 
-///     help: String,
-/// }
-/// 
-/// // `opt_help_def!(StrOpt, hint, help, hint_para, help_para)` will expand to
-/// 
-/// impl Help for StrOpt {
-///     fn hint(&self) -> &str {
-///         &self.hint
-///     }
-/// 
-///     fn help(&self) -> &str {
-///        &&self.help
-///     }
-/// 
-///     fn set_hint(&mut self, hint_para: &str) {
-///         self.hint = hint_para.to_owned()
-///     }
-///
-///     fn set_help(&mut self, help_para: &str) {
-///         self.help = help_para.to_owned()
-///     }
-///
-///     fn help_info(&self) -> HelpInfo {
-///         HelpInfo {
-///             hint: self.hint.clone(),
-///             help: self.help.clone(),
-///         }
-///     }
-/// }
-/// ```
-#[macro_export]
-macro_rules! opt_help_def {
-    ($opt:ty,
-     $hint:ident,
-     $help:ident,
-     $hint_para:ident,
-     $help_para:ident,
-    ) => (
-        impl Help for $opt {
-            fn hint(&self) -> &str {
-                &self.$hint
-            }
-
-            fn help(&self) -> &str {
-                &self.$help
-            }
-            
-            fn set_hint(&mut self, $hint_para: &str) {
-                self.$hint = $hint_para.to_owned()
-            }
-
-            fn set_help(&mut self, $help_para: &str) {
-                self.$help = $help_para.to_owned()
-            }
-
-            fn help_info(&self) -> HelpInfo {
-                HelpInfo {
-                    hint: self.$hint.clone(),
-                    help: self.$help.clone(),
-                }
-            }
-        }
-    );
-}
-
 pub mod str {
     use crate::opt::*;
     use crate::id::Identifier as IIdentifier;
@@ -1784,10 +1731,12 @@ pub mod str {
         alias: Vec<(String, String)>,
 
         callback: CallbackType,
+        
+        help: HelpInfo,
     }
 
     impl StrOpt {
-        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue) -> Self {
+        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue, help: HelpInfo) -> Self {
             Self {
                 id,
                 name,
@@ -1797,6 +1746,7 @@ pub mod str {
                 default_value,
                 alias: vec![],
                 callback: CallbackType::Null,
+                help: help,
             }
         }
     }
@@ -1846,6 +1796,20 @@ pub mod str {
     );
 
     opt_index_def!( StrOpt );
+
+    impl Help for StrOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
 
     impl Value for StrOpt {
         fn value(&self) -> &OptValue {
@@ -1926,6 +1890,7 @@ pub mod str {
                 ci.get_prefix().to_owned(),
                 ci.is_optional(),
                 ci.get_default_value().clone_or(&None),
+                ci.get_help_info().clone(),
             ));
 
             let alias = ci.get_alias();
@@ -1985,10 +1950,12 @@ pub mod bool {
         alias: Vec<(String, String)>,
 
         callback: CallbackType,
+
+        help: HelpInfo,
     }
 
     impl BoolOpt {
-        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, deactivate_style: bool) -> Self {
+        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, deactivate_style: bool, help: HelpInfo) -> Self {
             let default_value = if deactivate_style {
                     OptValue::from_bool(true)
                 } else {
@@ -2004,6 +1971,7 @@ pub mod bool {
                 deactivate_style,
                 alias: vec![],
                 callback: CallbackType::Null,
+                help,
             }
         }
     }
@@ -2053,6 +2021,20 @@ pub mod bool {
     );
 
     opt_index_def!( BoolOpt );
+
+    impl Help for BoolOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
 
     impl Value for BoolOpt {
         fn value(&self) -> &OptValue {
@@ -2145,6 +2127,7 @@ pub mod bool {
                 ci.get_prefix().to_owned(),
                 ci.is_optional(),
                 ci.is_deactivate_style(),
+                ci.get_help_info().clone(),
             ));
 
             let alias = ci.get_alias();
@@ -2203,10 +2186,12 @@ pub mod array {
         alias: Vec<(String, String)>,
 
         callback: CallbackType,
+
+        help: HelpInfo,
     }
 
     impl ArrayOpt {
-        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue) -> Self {
+        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue, help: HelpInfo) -> Self {
             Self {
                 id,
                 name,
@@ -2216,6 +2201,7 @@ pub mod array {
                 default_value,
                 alias: vec![],
                 callback: CallbackType::Null,
+                help,
             }
         }
     }
@@ -2265,6 +2251,20 @@ pub mod array {
     );
 
     opt_index_def!( ArrayOpt );
+
+    impl Help for ArrayOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
 
     impl Value for ArrayOpt {
         fn value(&self) -> &OptValue {
@@ -2362,6 +2362,7 @@ pub mod array {
                 ci.get_prefix().to_owned(),
                 ci.is_optional(),
                 ci.get_default_value().clone_or(&None),
+                ci.get_help_info().clone(),
             ));
 
             let alias = ci.get_alias();
@@ -2419,10 +2420,12 @@ pub mod int {
         alias: Vec<(String, String)>,
 
         callback: CallbackType,
+
+        help: HelpInfo,
     }
 
     impl IntOpt {
-        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue) -> Self {
+        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue, help: HelpInfo) -> Self {
             Self {
                 id,
                 name,
@@ -2432,6 +2435,7 @@ pub mod int {
                 default_value,
                 alias: vec![],
                 callback: CallbackType::Null,
+                help,
             }
         }
     }
@@ -2481,6 +2485,20 @@ pub mod int {
     );
 
     opt_index_def!( IntOpt );
+
+    impl Help for IntOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
 
     impl Value for IntOpt {
         fn value(&self) -> &OptValue {
@@ -2561,6 +2579,7 @@ pub mod int {
                 ci.get_prefix().to_owned(),
                 ci.is_optional(),
                 ci.get_default_value().clone_or(&None),
+                ci.get_help_info().clone(),
             ));
 
             let alias = ci.get_alias();
@@ -2618,10 +2637,12 @@ pub mod uint {
         alias: Vec<(String, String)>,
 
         callback: CallbackType,
+
+        help: HelpInfo,
     }
 
     impl UintOpt {
-        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue) -> Self {
+        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue, help: HelpInfo) -> Self {
             Self {
                 id,
                 name,
@@ -2631,6 +2652,7 @@ pub mod uint {
                 default_value,
                 alias: vec![],
                 callback: CallbackType::Null,
+                help,
             }
         }
     }
@@ -2680,6 +2702,20 @@ pub mod uint {
     );
 
     opt_index_def!( UintOpt );
+
+    impl Help for UintOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
 
     impl Value for UintOpt {
         fn value(&self) -> &OptValue {
@@ -2760,6 +2796,7 @@ pub mod uint {
                 ci.get_prefix().to_owned(),
                 ci.is_optional(),
                 ci.get_default_value().clone_or(&None),
+                ci.get_help_info().clone(),
             ));
 
             let alias = ci.get_alias();
@@ -2817,10 +2854,12 @@ pub mod flt {
         alias: Vec<(String, String)>,
 
         callback: CallbackType,
+
+        help: HelpInfo,
     }
 
     impl FltOpt {
-        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue) -> Self {
+        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue, help: HelpInfo) -> Self {
             Self {
                 id,
                 name,
@@ -2830,6 +2869,7 @@ pub mod flt {
                 default_value,
                 alias: vec![],
                 callback: CallbackType::Null,
+                help,
             }
         }
     }
@@ -2879,6 +2919,20 @@ pub mod flt {
     );
 
     opt_index_def!( FltOpt );
+
+    impl Help for FltOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
 
     impl Value for FltOpt {
         fn value(&self) -> &OptValue {
@@ -2959,6 +3013,7 @@ pub mod flt {
                 ci.get_prefix().to_owned(),
                 ci.is_optional(),
                 ci.get_default_value().clone_or(&None),
+                ci.get_help_info().clone(),
             ));
 
             let alias = ci.get_alias();
@@ -3006,10 +3061,12 @@ pub mod example {
         alias: Vec<(String, String)>,
 
         callback: CallbackType,
+
+        help: HelpInfo,
     }
 
     impl PathOpt {
-        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue) -> Self {
+        pub fn new(id: IIdentifier, name: String, prefix: String, optional: bool, default_value: OptValue, help: HelpInfo) -> Self {
             Self {
                 id,
                 name,
@@ -3019,6 +3076,7 @@ pub mod example {
                 default_value,
                 alias: vec![],
                 callback: CallbackType::Null,
+                help,
             }
         }
     }
@@ -3068,6 +3126,20 @@ pub mod example {
     );
 
     opt_index_def!( PathOpt );
+
+    impl Help for PathOpt {
+        fn set_hint(&mut self, hint: &str) {
+            self.help.hint = hint.to_owned()
+        }
+
+        fn set_help(&mut self, help: &str) {
+            self.help.help = help.to_owned()
+        }
+
+        fn help_info(&self) -> HelpInfo {
+            self.help.clone_or(self)
+        }
+    }
 
     impl Value for PathOpt {
         fn value(&self) -> &OptValue {
@@ -3146,6 +3218,7 @@ pub mod example {
                 ci.get_prefix().to_owned(),
                 ci.is_optional(),
                 ci.get_default_value().clone_or(&Some(clone_helper)),
+                ci.get_help_info().clone(),
             ));
 
             let alias = ci.get_alias();
@@ -3236,6 +3309,9 @@ mod tests {
         opt.reset_value();
         assert_eq!(opt.value().as_int(), Some(&-42));
 
+        assert_eq!(opt.help_info().hint, "[+count=int]");
+        assert_eq!(opt.help_info().help, "");
+
         assert_eq!(opt.as_ref().as_any().is::<int::IntOpt>(), true);
     }
 
@@ -3305,6 +3381,9 @@ mod tests {
         opt.reset_value();
         assert_eq!(opt.value().as_uint(), Some(&42));
 
+        assert_eq!(opt.help_info().hint, "[+count=uint]");
+        assert_eq!(opt.help_info().help, "");
+
         assert_eq!(opt.as_ref().as_any().is::<uint::UintOpt>(), true);
     }
 
@@ -3373,6 +3452,9 @@ mod tests {
         assert_eq!(opt.default_value().as_flt(), Some(&42.6));
         opt.reset_value();
         assert_eq!(opt.value().as_flt(), Some(&42.6));
+
+        assert_eq!(opt.help_info().hint, "[+count=flt]");
+        assert_eq!(opt.help_info().help, "");
 
         assert_eq!(opt.as_ref().as_any().is::<flt::FltOpt>(), true);
     }
@@ -3445,6 +3527,9 @@ mod tests {
         assert_eq!(opt.default_value().as_bool(), Some(&true));
         opt.reset_value();
         assert_eq!(opt.value().as_bool(), Some(&true));
+
+        assert_eq!(opt.help_info().hint, "[+count=bool]");
+        assert_eq!(opt.help_info().help, "");
 
         assert_eq!(opt.as_ref().as_any().is::<bool::BoolOpt>(), true);
     }
@@ -3525,6 +3610,9 @@ mod tests {
         opt.reset_value();
         assert_eq!(opt.value().as_vec(), 
             Some(&["foo", "bar", "poi"].iter().map(|&i|String::from(i)).collect::<Vec<String>>()));
+
+        assert_eq!(opt.help_info().hint, "[+count=array]");
+        assert_eq!(opt.help_info().help, "");
 
         assert_eq!(opt.as_ref().as_any().is::<array::ArrayOpt>(), true);
     }
