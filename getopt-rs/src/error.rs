@@ -42,4 +42,7 @@ pub enum Error {
 
     #[error("invalid callback type: `{0}`")]
     InvalidCallbackType(String),
+
+    #[error("catch error: `{0}`")]
+    RaisedError(String),
 }

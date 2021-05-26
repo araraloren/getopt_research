@@ -24,6 +24,10 @@ pub mod prelude {
     pub use crate::arg::ArgIterator;
     pub use crate::id::IdGenerator;
     pub use crate::id::DefaultIdGen;
+    pub use crate::id::Identifier;
+    pub use crate::proc::Subscriber;
+    pub use crate::opt::Opt;
+    pub use crate::callback::*;
     pub use crate::getopt_impl;
     
     /// getopt will set do the previous work for you,
@@ -97,6 +101,53 @@ pub async fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Pars
     Ok(None)
 }
 
-pub fn create_idgenerator(id: u64) -> Box<dyn IdGenerator>  {
-    Box::new(DefaultIdGen::new(crate::id::Identifier::new(id)))
+pub mod tools {
+    use crate::callback::OptCallback;
+    use crate::parser::DelayParser;
+    use crate::parser::ForwardParser;
+    use crate::parser::PreParser;
+    use crate::callback::*;
+    use crate::prelude::*;
+    use simplelog::CombinedLogger;
+    use simplelog::SimpleLogger;
+    use log::LevelFilter;
+    use simplelog::Config;
+
+
+    pub fn idgenerator(id: u64) -> Box<dyn IdGenerator>  {
+        Box::new(DefaultIdGen::new(crate::id::Identifier::new(id)))
+    }
+
+    pub fn open_log() -> std::result::Result<(), log::SetLoggerError> {
+        CombinedLogger::init(vec![
+            SimpleLogger::new(LevelFilter::Warn, Config::default()),
+            SimpleLogger::new(LevelFilter::Error, Config::default()),
+            SimpleLogger::new(LevelFilter::Debug, Config::default()),
+            SimpleLogger::new(LevelFilter::Info, Config::default()),
+        ])
+    }
+
+    pub fn delay_parser(id_generator: Box<dyn IdGenerator>) -> DelayParser {
+        DelayParser::new(id_generator)
+    }
+
+    pub fn pre_parser(id_generator: Box<dyn IdGenerator>) -> PreParser {
+        PreParser::new(id_generator)
+    }
+
+    pub fn forward_parser(id_generator: Box<dyn IdGenerator>) -> ForwardParser {
+        ForwardParser::new(id_generator)
+    }
+
+    pub fn simple_value_callback<T>(t: T) -> OptCallback where T: 'static + FnMut(&dyn Opt) -> Result<bool> {
+        OptCallback::from_value(Box::new(SimpleValueCallback::new(t))) 
+    }
+
+    pub fn simple_index_callback<T>(t: T) -> OptCallback where T: 'static + FnMut( &dyn Set, &String ) -> Result<bool> {
+        OptCallback::from_index(Box::new(SimpleIndexCallback::new(t))) 
+    }
+
+    pub fn simple_main_callback<T>(t: T) -> OptCallback where T: 'static + FnMut( &dyn Set, &Vec<String> ) -> Result<bool> {
+        OptCallback::from_main(Box::new(SimpleMainCallback::new(t))) 
+    }
 }

@@ -156,14 +156,7 @@ fn example3() {
             ))));
     }
 
-    // set.subscribe_from(&mut parser);
-    // parser.publish_to(Box::new(set));
-
-    let mut ai: ArgIterator = ArgIterator::new();
-
-    ai.set_args(&mut std::env::args().skip(1));
-
-    getopt!(ai, parser, set);
+    getopt!(parser, set).unwrap();
 }
 
 

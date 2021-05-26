@@ -8,37 +8,63 @@ use quote::quote;
 
 #[derive(Debug)]
 struct GetoptArgs {
-    iterator: Expr,
+    iterator: Option<Expr>,
     parsers: Punctuated<Expr, Comma>,
     sets: Punctuated<Expr, Comma>,
+}
+
+enum ParseState {
+    PSParser,
+    PSSet,
 }
 
 impl Parse for GetoptArgs {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut parsers = Punctuated::new();
         let mut sets = Punctuated::new();
+        let mut state = ParseState::PSParser;
         let iterator: Expr = input.parse()?;
-        let _: Comma = input.parse()?;
+        let comma: Comma = input.parse()?;
 
         while ! input.is_empty() {
-            let parse: Expr = input.parse()?;
-
-            parsers.push_value(parse);
-            parsers.push_punct(input.parse()?);
-
-            let set: Expr = input.parse()?;
-
-            sets.push_value(set);
-            if input.is_empty() {
-                break;
+            match state {
+                ParseState::PSParser => {
+                    let parse: Expr = input.parse()?;
+                    parsers.push(parse);
+                    state = ParseState::PSSet;
+                    if input.is_empty() {
+                        break;
+                    }
+                    parsers.push_punct(input.parse()?);
+                }
+                ParseState::PSSet => {
+                    let set: Expr = input.parse()?;
+                    sets.push(set);
+                    state = ParseState::PSParser;
+                    if input.is_empty() {
+                        break;
+                    }
+                    sets.push_punct(input.parse()?);
+                }
             }
-            sets.push_punct(input.parse()?);
         }
-        Ok(GetoptArgs {
-            iterator,
-            parsers,
-            sets,
-        })
+
+        if parsers.len() > sets.len() {
+            sets.push_value(iterator);
+            sets.push_punct(comma);
+            Ok(GetoptArgs {
+                iterator: None,
+                parsers: sets,
+                sets: parsers,
+            })
+        }
+        else {
+            Ok(GetoptArgs {
+                iterator: Some(iterator),
+                parsers,
+                sets,
+            })
+        }
     }
 }
 
@@ -47,29 +73,50 @@ impl Parse for GetoptArgs {
 pub fn getopt(input: TokenStream) -> TokenStream {
     let getopt_args = parse_macro_input!(input as GetoptArgs);
 
-    let iterator = match &getopt_args.iterator {
-        Expr::Path(path) => {
-            quote! {
-                &mut #path
-            }
-        }
-        Expr::Reference(reference) => {
-            if reference.mutability.is_some() {
-                quote! {
-                    #reference
+    let iterator = match getopt_args.iterator.as_ref() {
+        Some(iterator) => {
+            match iterator {
+                Expr::Path(path) => {
+                    quote! {
+                        &mut #path
+                    }
+                }
+                Expr::Reference(reference) => {
+                    if reference.mutability.is_some() {
+                        quote! {
+                            #reference
+                        }
+                    }
+                    else {
+                        Error::new_spanned(reference, "need an instance or a mutable reference").to_compile_error()
+                    }
+                }
+                expr => {
+                    quote! { #expr }
                 }
             }
-            else {
-                Error::new_spanned(reference, "need an instance or a mutable reference").to_compile_error()
-            }
         }
-        expr => {
-            quote! { #expr }
+        None => {
+            quote! {
+                &mut ai
+            }
         }
     };
 
-    let mut getopt_init = quote! {
-        let mut parsers: Vec<Box<dyn Parser>> = vec![];
+    let mut getopt_init = match getopt_args.iterator.as_ref() {
+        Some(_) => {
+            quote! {
+                let mut parsers: Vec<Box<dyn Parser>> = vec![];
+            }
+        }
+        None => {
+            quote! {
+                let mut parsers: Vec<Box<dyn Parser>> = vec![];
+                let mut ai = ArgIterator::new();
+                
+                ai.set_args(&mut std::env::args().skip(1));
+            }
+        }
     };
 
     getopt_init.extend(
