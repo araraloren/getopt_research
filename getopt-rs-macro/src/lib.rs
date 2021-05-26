@@ -143,29 +143,50 @@ pub fn getopt(input: TokenStream) -> TokenStream {
 pub fn getopt(input: TokenStream) -> TokenStream {
     let getopt_args = parse_macro_input!(input as GetoptArgs);
 
-    let iterator = match &getopt_args.iterator {
-        Expr::Path(path) => {
-            quote! {
-                &mut #path
-            }
-        }
-        Expr::Reference(reference) => {
-            if reference.mutability.is_some() {
-                quote! {
-                    #reference
+    let iterator = match getopt_args.iterator.as_ref() {
+        Some(iterator) => {
+            match iterator {
+                Expr::Path(path) => {
+                    quote! {
+                        &mut #path
+                    }
+                }
+                Expr::Reference(reference) => {
+                    if reference.mutability.is_some() {
+                        quote! {
+                            #reference
+                        }
+                    }
+                    else {
+                        Error::new_spanned(reference, "need an instance or a mutable reference").to_compile_error()
+                    }
+                }
+                expr => {
+                    quote! { #expr }
                 }
             }
-            else {
-                Error::new_spanned(reference, "need an instance or a mutable reference").to_compile_error()
-            }
         }
-        expr => {
-            quote! { #expr }
+        None => {
+            quote! {
+                &mut ai
+            }
         }
     };
 
-    let mut getopt_init = quote! {
-        let mut parsers: Vec<Box<dyn Parser>> = vec![];
+    let mut getopt_init = match getopt_args.iterator.as_ref() {
+        Some(_) => {
+            quote! {
+                let mut parsers: Vec<Box<dyn Parser>> = vec![];
+            }
+        }
+        None => {
+            quote! {
+                let mut parsers: Vec<Box<dyn Parser>> = vec![];
+                let mut ai = ArgIterator::new();
+                
+                ai.set_args(&mut std::env::args().skip(1));
+            }
+        }
     };
 
     getopt_init.extend(
@@ -181,7 +202,7 @@ pub fn getopt(input: TokenStream) -> TokenStream {
 
     let ret = quote! {async {
         #getopt_init
-        getopt_impl(#iterator, parsers)
+        getopt_impl(#iterator, parsers).await
     }};
     ret.into()
 }
