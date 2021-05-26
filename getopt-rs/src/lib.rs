@@ -1,14 +1,15 @@
 pub mod id;
-pub mod error;
-pub mod callback;
 pub mod opt;
 pub mod ctx;
 pub mod set;
 pub mod arg;
 pub mod proc;
+pub mod help;
+pub mod error;
 pub mod utils;
 pub mod parser;
 pub mod nonopt;
+pub mod callback;
 
 #[macro_use]
 extern crate log;
