@@ -472,7 +472,7 @@ pub mod main {
                 name,
                 optional: true,
                 value: OptValue::default(),
-                index: NonOptIndex::default(), // Cmd is the first noa
+                index: NonOptIndex::new(0), // Main need match anywhere
                 callback: CallbackType::default(),
                 default_value: OptValue::default(),
             }
