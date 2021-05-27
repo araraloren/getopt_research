@@ -1770,8 +1770,8 @@ impl GenStyle {
 pub fn parser_default_opt_check(set: &dyn Set) -> Result<bool> {
         for opt in set.iter() {
             if opt.as_ref().is_style(Style::Boolean) 
-            && opt.as_ref().is_style(Style::Argument) 
-            && opt.as_ref().is_style(Style::Multiple) {
+            || opt.as_ref().is_style(Style::Argument) 
+            || opt.as_ref().is_style(Style::Multiple) {
                 opt.check()?;
             }
         }
@@ -1784,8 +1784,9 @@ pub fn parser_default_nonopt_check(set: &dyn Set) -> Result<bool> {
     let mut index_map: HashMap<i64, Vec<Identifier>> = HashMap::new();
 
     for opt in set.iter() {
-        if opt.as_ref().is_style(Style::Pos) && opt.as_ref().is_style(Style::Cmd) 
-            && opt.as_ref().is_style(Style::Main) {
+        if opt.as_ref().is_style(Style::Pos) 
+            || opt.as_ref().is_style(Style::Cmd) 
+            || opt.as_ref().is_style(Style::Main) {
             let entry = index_map
                 .entry(opt.as_ref().index().calc_index(len).unwrap())
                 .or_insert(vec![]);
