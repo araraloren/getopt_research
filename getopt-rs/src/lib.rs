@@ -139,14 +139,17 @@ pub mod tools {
         ForwardParser::new(id_generator)
     }
 
+    #[cfg(not(feature="async"))]
     pub fn simple_value_callback<T>(t: T) -> OptCallback where T: 'static + FnMut(&dyn Opt) -> Result<bool> {
         OptCallback::from_value(Box::new(SimpleValueCallback::new(t))) 
     }
 
+    #[cfg(not(feature="async"))]
     pub fn simple_index_callback<T>(t: T) -> OptCallback where T: 'static + FnMut( &dyn Set, &String ) -> Result<bool> {
         OptCallback::from_index(Box::new(SimpleIndexCallback::new(t))) 
     }
 
+    #[cfg(not(feature="async"))]
     pub fn simple_main_callback<T>(t: T) -> OptCallback where T: 'static + FnMut( &dyn Set, &Vec<String> ) -> Result<bool> {
         OptCallback::from_main(Box::new(SimpleMainCallback::new(t))) 
     }
