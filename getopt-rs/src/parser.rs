@@ -1,23 +1,12 @@
 
-use crate::{ctx::DelayContext, proc::Proc};
-use crate::proc::SequenceProc;
-use crate::proc::Publisher;
-use crate::proc::Info;
+use crate::ctx::{Context, OptContext, NonOptContext, DelayContext};
+use crate::proc::{Info, Proc, Publisher, SequenceProc};
+use crate::opt::{Opt, Style, OptValue};
+use crate::callback::{OptCallback, CallbackType};
+use crate::id::{Identifier, IdGenerator};
+use crate::arg::{IndexIterator, Argument};
+use crate::error::{Error, Result};
 use crate::set::Set;
-use crate::opt::Opt;
-use crate::opt::Style;
-use crate::opt::OptValue;
-use crate::callback::OptCallback;
-use crate::callback::CallbackType;
-use crate::id::IdGenerator;
-use crate::id::Identifier;
-use crate::ctx::Context;
-use crate::ctx::OptContext;
-use crate::ctx::NonOptContext;
-use crate::arg::IndexIterator;
-use crate::arg::Argument;
-use crate::error::Result;
-use crate::error::Error;
 
 use std::fmt::Debug;
 use std::collections::HashMap;

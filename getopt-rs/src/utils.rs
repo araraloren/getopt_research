@@ -1,11 +1,9 @@
 
 use std::fmt::Debug;
 
-use crate::{callback::CallbackType, opt::Opt};
-use crate::opt::NonOptIndex;
-use crate::opt::OptValue;
-use crate::error::Error;
-use crate::error::Result;
+use crate::callback::CallbackType;
+use crate::opt::{Opt, OptValue, NonOptIndex};
+use crate::error::{Error, Result};
 use crate::proc::Info;
 use crate::id::Identifier;
 

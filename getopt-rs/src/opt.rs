@@ -4,11 +4,9 @@ use std::any::Any;
 
 use crate::callback::CallbackType;
 use crate::id::Identifier as IIdentifier;
-use crate::utils::Utils;
-use crate::utils::CreateInfo;
+use crate::utils::{Utils, CreateInfo};
 use crate::proc::Info;
-use crate::error::Error;
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 /// The option style type.
 #[derive(Debug, Clone, PartialEq, Eq)]

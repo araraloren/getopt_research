@@ -9,10 +9,8 @@ use crate::opt_callback_def;
 use crate::opt_optional_def;
 use crate::opt::Opt;
 use crate::callback::CallbackType;
-use crate::error::Result;
-use crate::error::Error;
-use crate::utils::Utils;
-use crate::utils::CreateInfo;
+use crate::error::{Result, Error};
+use crate::utils::{Utils, CreateInfo};
 use crate::proc::Info;
 
 pub trait NonOpt: Opt { }

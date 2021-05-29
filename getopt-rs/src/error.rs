@@ -43,6 +43,9 @@ pub enum Error {
     #[error("invalid callback type: `{0}`")]
     InvalidCallbackType(String),
 
+    #[error("catch io error: `{0}`")]
+    CatchIOError(#[from] std::io::Error),
+
     #[error("catch error: `{0}`")]
     RaisedError(String),
 }

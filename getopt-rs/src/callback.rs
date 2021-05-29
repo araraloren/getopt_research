@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 use async_trait::async_trait;
 
-use crate::opt::*;
-use crate::error::*;
+use crate::opt::Opt;
+use crate::error::Result;
 use crate::set::Set;
 
 /// Callback will be used by `option` type such as [`BoolOpt`](crate::opt::bool::BoolOpt)
@@ -185,12 +185,12 @@ impl Default for CallbackType {
 
 /// Simple callback implementation for [`ValueCallback`]
 #[cfg(not(feature="async"))]
-pub struct SimpleValueCallback<T: FnMut(&dyn Opt) -> Result<bool>>(Box<T>);
+pub struct SimpleValueCallback<T: FnMut(&dyn Opt) -> Result<bool>>(T);
 
 #[cfg(not(feature="async"))]
 impl<T: FnMut(&dyn Opt) -> Result<bool>> SimpleValueCallback<T> {
     pub fn new(cb: T) -> Self {
-        Self(Box::new(cb))
+        Self(cb)
     }
 }
 
@@ -206,18 +206,18 @@ impl<T: FnMut(&dyn Opt) -> Result<bool>> Debug for SimpleValueCallback<T> {
 #[cfg(not(feature="async"))]
 impl<T: FnMut(&dyn Opt) -> Result<bool>> ValueCallback for SimpleValueCallback<T> {
     fn call(&mut self, opt: &dyn Opt) -> Result<bool> {
-        self.0.as_mut()(opt)
+        self.0(opt)
     }
 }
 
 /// Simple callback implementation for [`IndexCallback`]
 #[cfg(not(feature="async"))]
-pub struct SimpleIndexCallback<T: FnMut( &dyn Set, &String ) -> Result<bool>>(Box<T>);
+pub struct SimpleIndexCallback<T: FnMut( &dyn Set, &String ) -> Result<bool>>(T);
 
 #[cfg(not(feature="async"))]
 impl<T: FnMut( &dyn Set, &String ) -> Result<bool>> SimpleIndexCallback<T> {
     pub fn new(cb: T) -> Self {
-        Self(Box::new(cb))
+        Self(cb)
     }
 }
 
@@ -233,18 +233,18 @@ impl<T: FnMut( &dyn Set, &String ) -> Result<bool>> Debug for SimpleIndexCallbac
 #[cfg(not(feature="async"))]
 impl<T: FnMut( &dyn Set, &String ) -> Result<bool>> IndexCallback for SimpleIndexCallback<T> {
     fn call(&mut self, set: &dyn Set, arg: &String) -> Result<bool> {
-        self.0.as_mut()(set, arg)
+        self.0(set, arg)
     }
 }
 
 /// Simple callback implementation for [`MainCallback`]
 #[cfg(not(feature="async"))]
-pub struct SimpleMainCallback<T: FnMut( &dyn Set, &Vec<String> ) -> Result<bool> >(Box<T>);
+pub struct SimpleMainCallback<T: FnMut( &dyn Set, &Vec<String> ) -> Result<bool> >(T);
 
 #[cfg(not(feature="async"))]
 impl<T: FnMut( &dyn Set, &Vec<String> ) -> Result<bool> > SimpleMainCallback<T> {
     pub fn new(cb: T) -> Self {
-        Self(Box::new(cb))
+        Self(cb)
     }
 }
 
@@ -260,6 +260,6 @@ impl<T: FnMut( &dyn Set, &Vec<String> ) -> Result<bool> > Debug for SimpleMainCa
 #[cfg(not(feature="async"))]
 impl<T: FnMut( &dyn Set, &Vec<String> ) -> Result<bool> > MainCallback for SimpleMainCallback<T> {
     fn call(&mut self, set: &dyn Set, args: &Vec<String>) -> Result<bool> {
-        self.0.as_mut()(set, args)
+        self.0(set, args)
     }
 }

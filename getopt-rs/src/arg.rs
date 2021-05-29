@@ -1,10 +1,9 @@
 
-use crate::error::Result;
-use crate::error::Error;
-
 use std::fmt::Debug;
 use std::iter::Iterator;
 use async_trait::async_trait;
+
+use crate::error::{Result, Error};
 
 /// `IndexIterator` iterate the arguments by index.
 /// It can access [`current`](IndexIterator::current) and [`next`](IndexIterator::next) argument at same time.

@@ -1,27 +1,26 @@
-
 #[macro_use]
 extern crate getopt_rs;
 
-use getopt_rs::{arg::ArgIterator};
+use getopt_rs::arg::ArgIterator;
 use getopt_rs::arg::IndexIterator;
 use getopt_rs::callback::OptCallback;
-#[cfg(not(features="async"))]
+#[cfg(not(features = "async"))]
 use getopt_rs::callback::*;
+use getopt_rs::error::Result;
+use getopt_rs::getopt_impl;
 use getopt_rs::id::DefaultIdGen;
 use getopt_rs::id::Identifier;
 use getopt_rs::opt::Opt;
-use getopt_rs::parser::ForwardParser;
 use getopt_rs::parser::DelayParser;
+use getopt_rs::parser::ForwardParser;
 use getopt_rs::parser::Parser;
 use getopt_rs::proc::Subscriber;
 use getopt_rs::set::DefaultSet;
 use getopt_rs::set::Set;
-use getopt_rs::error::Result;
+use getopt_rs_macro::getopt;
 use simplelog::*;
 use std::sync::Arc;
 use std::sync::Mutex;
-use getopt_rs_macro::getopt;
-use getopt_rs::getopt_impl;
 
 #[async_std::main]
 async fn main() {
@@ -36,7 +35,6 @@ async fn main() {
     example3();
 }
 
-
 fn example3() {
     let mut cache: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
     let mut set = DefaultSet::new();
@@ -44,121 +42,124 @@ fn example3() {
 
     set.initialize_prefixs();
     set.initialize_utils().unwrap();
- 
+
     if let Ok(mut commit) = set.add_opt("-d=bool") {
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
-        parser.set_callback(id, 
-            OptCallback::Value(Box::new(SimpleValueCallback::new(
-                move |_| {
-                    let mut writer = cache_ref.lock().unwrap();
-                    let ret = (*writer).iter()
-                        .filter(|&v|{ std::path::Path::new(v.as_str()).is_dir()})
-                        .map(|v| { v.clone() })
-                        .collect();
-                    *writer = ret;
-                    Ok(true)
-                }
-            ))));
+        parser.set_callback(
+            id,
+            OptCallback::Value(Box::new(SimpleValueCallback::new(move |_| {
+                let mut writer = cache_ref.lock().unwrap();
+                let ret = (*writer)
+                    .iter()
+                    .filter(|&v| std::path::Path::new(v.as_str()).is_dir())
+                    .map(|v| v.clone())
+                    .collect();
+                *writer = ret;
+                Ok(true)
+            }))),
+        );
     }
     if let Ok(mut commit) = set.add_opt("-f=bool") {
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
-        parser.set_callback(id, 
-            OptCallback::Value(Box::new(SimpleValueCallback::new(
-                move |_| {
-                    let mut writer = cache_ref.lock().unwrap();
-                    let ret = (*writer).iter()
-                        .filter(|&v|{ std::path::Path::new(v.as_str()).is_file()})
-                        .map(|v| { v.clone() })
-                        .collect();
-                    *writer = ret;
-                    Ok(true)
-                }
-            ))));
+        parser.set_callback(
+            id,
+            OptCallback::Value(Box::new(SimpleValueCallback::new(move |_| {
+                let mut writer = cache_ref.lock().unwrap();
+                let ret = (*writer)
+                    .iter()
+                    .filter(|&v| std::path::Path::new(v.as_str()).is_file())
+                    .map(|v| v.clone())
+                    .collect();
+                *writer = ret;
+                Ok(true)
+            }))),
+        );
     }
     if let Ok(mut commit) = set.add_opt("-l=bool") {
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
-        parser.set_callback(id, 
-            OptCallback::Value(Box::new(SimpleValueCallback::new(
-                move |_| {
-                    let mut writer = cache_ref.lock().unwrap();
-                    let ret = (*writer).iter()
-                        .filter(|&v|{ std::path::Path::new(v.as_str()).read_link().is_ok()})
-                        .map(|v| { v.clone() })
-                        .collect();
-                    *writer = ret;
-                    Ok(true)
-                }
-            ))));
+        parser.set_callback(
+            id,
+            OptCallback::Value(Box::new(SimpleValueCallback::new(move |_| {
+                let mut writer = cache_ref.lock().unwrap();
+                let ret = (*writer)
+                    .iter()
+                    .filter(|&v| std::path::Path::new(v.as_str()).read_link().is_ok())
+                    .map(|v| v.clone())
+                    .collect();
+                *writer = ret;
+                Ok(true)
+            }))),
+        );
     }
     if let Ok(mut commit) = set.add_opt("-s=uint") {
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
-        parser.set_callback(id, 
-            OptCallback::Value(Box::new(SimpleValueCallback::new(
-                move |opt| {
-                    let mut writer = cache_ref.lock().unwrap();
-                    let ret = (*writer).iter()
-                        .filter(|&v|{ 
-                            let metadata = std::fs::metadata(v).unwrap();
-                            metadata.len() > *opt.value().as_uint().unwrap()
-                        })
-                        .map(|v| { v.clone() })
-                        .collect();
-                    *writer = ret;
-                    Ok(true)
-                }
-            ))));
+        parser.set_callback(
+            id,
+            OptCallback::Value(Box::new(SimpleValueCallback::new(move |opt| {
+                let mut writer = cache_ref.lock().unwrap();
+                let ret = (*writer)
+                    .iter()
+                    .filter(|&v| {
+                        let metadata = std::fs::metadata(v).unwrap();
+                        metadata.len() > *opt.value().as_uint().unwrap()
+                    })
+                    .map(|v| v.clone())
+                    .collect();
+                *writer = ret;
+                Ok(true)
+            }))),
+        );
     }
     if let Ok(mut commit) = set.add_opt("directory=pos@1") {
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
-        parser.set_callback(id, 
-            OptCallback::Index(Box::new(SimpleIndexCallback::new(
-                move |_, v| {
-                    let mut writer = cache_ref.lock().unwrap();
-                    for entry in std::fs::read_dir(v).unwrap() {
-                        let entry = entry.unwrap();
-                        
-                        (*writer).push(entry.path().to_str().unwrap().to_owned());
-                    }
-                    Ok(true)
+        parser.set_callback(
+            id,
+            OptCallback::Index(Box::new(SimpleIndexCallback::new(move |_, v| {
+                let mut writer = cache_ref.lock().unwrap();
+                for entry in std::fs::read_dir(v).unwrap() {
+                    let entry = entry.unwrap();
+
+                    (*writer).push(entry.path().to_str().unwrap().to_owned());
                 }
-            ))));
+                Ok(true)
+            }))),
+        );
     }
     if let Ok(mut commit) = set.add_opt("main=main") {
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
-        parser.set_callback(id, 
-            OptCallback::Main(Box::new(SimpleMainCallback::new(
-                move |_, noa| {
-                    let mut regex: Option<regex::Regex> = None;
+        parser.set_callback(
+            id,
+            OptCallback::Main(Box::new(SimpleMainCallback::new(move |_, noa| {
+                let mut regex: Option<regex::Regex> = None;
 
-                    if noa.len() == 2 {
-                        regex = regex::Regex::new(noa[1].as_str()).ok();
-                    }
-                    for file in cache_ref.lock().unwrap().iter() {
-                        match &regex {
-                            Some(regex) => {
-                                if regex.is_match(file) {
-                                    println!("{}", file);
-                                }
-                            }
-                            None => {
+                if noa.len() == 2 {
+                    regex = regex::Regex::new(noa[1].as_str()).ok();
+                }
+                for file in cache_ref.lock().unwrap().iter() {
+                    match &regex {
+                        Some(regex) => {
+                            if regex.is_match(file) {
                                 println!("{}", file);
                             }
                         }
+                        None => {
+                            println!("{}", file);
+                        }
                     }
-                    Ok(true)
                 }
-            ))));
+                Ok(true)
+            }))),
+        );
     }
 
     getopt!(parser, set).unwrap();
 }
-
 
 // async fn example3() {
 //     let cache: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
@@ -208,7 +209,7 @@ fn example3() {
 //             Ok(true)
 //         }
 //     }
- 
+
 //     if let Ok(mut commit) = set.add_opt("-d=bool") {
 //         let id = commit.commit().unwrap();
 //         parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
@@ -235,7 +236,7 @@ fn example3() {
 //             let mut writer = self.0.lock().unwrap();
 //             for entry in std::fs::read_dir(v).unwrap() {
 //                 let entry = entry.unwrap();
-                
+
 //                 (*writer).push(entry.path().to_str().unwrap().to_owned());
 //             }
 //             Ok(true)
@@ -399,7 +400,7 @@ fn example3() {
 //         .iter()
 //         .map(|&s| String::from(s)),
 //     );
-    
+
 //     let ret = parser.parse(&mut ai);
 
 //     dbg!(ret);
@@ -517,7 +518,7 @@ fn example3() {
 //         .iter()
 //         .map(|&s| String::from(s)),
 //     );
-    
+
 //     let ret = parser.parse(&mut ai);
 
 //     dbg!(ret);

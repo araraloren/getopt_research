@@ -16,18 +16,15 @@ extern crate log;
 extern crate async_trait;
 
 pub mod prelude {
-    pub use crate::set::Set;
-    pub use crate::error::Result;
-    pub use crate::parser::Parser;
-    pub use crate::set::DefaultSet;
-    pub use crate::arg::IndexIterator;
-    pub use crate::arg::ArgIterator;
-    pub use crate::id::IdGenerator;
-    pub use crate::id::DefaultIdGen;
-    pub use crate::id::Identifier;
+    pub use crate::error::{Result, Error};
+    pub use crate::parser::{Parser, ForwardParser, DelayParser, PreParser};
+    pub use crate::set::{Set, DefaultSet};
+    pub use crate::arg::{IndexIterator, ArgIterator};
+    pub use crate::id::{IdGenerator, DefaultIdGen, Identifier};
     pub use crate::proc::Subscriber;
     pub use crate::opt::Opt;
-    pub use crate::callback::*;
+    pub use crate::callback::{CallbackType, OptCallback};
+    pub use crate::callback::{SimpleIndexCallback, SimpleMainCallback, SimpleValueCallback};
     pub use crate::getopt_impl;
     
     /// getopt will set do the previous work for you,
@@ -102,16 +99,9 @@ pub async fn getopt_impl(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Pars
 }
 
 pub mod tools {
-    use crate::callback::OptCallback;
-    use crate::parser::DelayParser;
-    use crate::parser::ForwardParser;
-    use crate::parser::PreParser;
-    use crate::callback::*;
     use crate::prelude::*;
-    use simplelog::CombinedLogger;
-    use simplelog::SimpleLogger;
+    use simplelog::{Config, CombinedLogger, SimpleLogger};
     use log::LevelFilter;
-    use simplelog::Config;
 
 
     pub fn idgenerator(id: u64) -> Box<dyn IdGenerator>  {

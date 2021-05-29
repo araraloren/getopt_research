@@ -1,10 +1,8 @@
 
 use std::fmt::Debug;
 
-use crate::opt::Opt;
-use crate::opt::Style;
-use crate::error::Result;
-use crate::error::Error;
+use crate::opt::{Opt, Style};
+use crate::error::{Result, Error};
 use crate::id::Identifier;
 
 pub trait Context: Debug {
