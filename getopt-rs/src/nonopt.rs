@@ -819,7 +819,7 @@ mod tests {
         assert_eq!(nonopt.rem_alias("-", "c"), false);
         assert_eq!(nonopt.alias(), None);
 
-        assert_eq!(nonopt.index(), &NonOptIndex::Null);
+        assert_eq!(nonopt.index(), &NonOptIndex::AnyWhere);
         assert_eq!(nonopt.match_index(6, 1), true);
         nonopt.set_index(NonOptIndex::Forward(3));
         assert_eq!(nonopt.match_index(6, 4), true);

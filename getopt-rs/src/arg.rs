@@ -111,7 +111,7 @@ impl Argument {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ArgIterator {
     cache_prefixs: Vec<String>,
 

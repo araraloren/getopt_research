@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::slice::{Iter, IterMut};
 use std::ops::{Index, IndexMut};
 use std::collections::HashMap;
@@ -23,8 +24,9 @@ use crate::id::Identifier;
 /// use getopt_rs::set::DefaultSet;
 /// use getopt_rs::set::Set;
 /// use getopt_rs::opt::int::IntUtils;
+/// use getopt_rs::proc::SequenceProc;
 ///  
-/// let mut set = DefaultSet::new();
+/// let mut set = DefaultSet::<SequenceProc>::new();
 /// 
 /// // before you add option, you need add Utils
 /// set.add_utils(Box::new(IntUtils::new())).unwrap();
@@ -39,7 +41,7 @@ use crate::id::Identifier;
 ///     commit.commit();
 /// }
 /// ```
-pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut<Identifier> {
+pub trait Set<T: Proc>: Debug + Subscriber<T> + Index<Identifier, Output=dyn Opt> + IndexMut<Identifier> {
     /// Add an [`Utils`] to the Set, return Err if the [`Utils`]'s name exist.
     fn add_utils(&mut self, utils: Box<dyn Utils>) -> Result<bool>;
 
@@ -54,7 +56,7 @@ pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut
 
     
     /// Create and return an [`Commit`] using the `opt`, return Err if the `opt` is invlaid.
-    fn add_opt(&mut self, opt: &str) -> Result<Commit>;
+    fn add_opt(&mut self, opt: &str) -> Result<Commit<T>>;
 
     /// Create and add an option using the given [`CreateInfo`], return Err if create failed.
     fn add_opt_ci(&mut self, ci: &CreateInfo) -> Result<Identifier>;
@@ -80,10 +82,10 @@ pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut
 
 
     /// Create and return an [`Filter`] using the `opt`, return Err if the `opt` is invalid.
-    fn filter(&self, opt: &str) -> Result<Filter>;
+    fn filter(&self, opt: &str) -> Result<Filter<T>>;
 
     /// Create and return an [`FilterMut`] using the `opt`, return Err if the `opt` is invalid.
-    fn filter_mut(&mut self, opt: &str) -> Result<FilterMut>;
+    fn filter_mut(&mut self, opt: &str) -> Result<FilterMut<T>>;
     
     /// Return the first option reference match the [`FilterInfo`], return None if no option matched.
     fn find(&self, fi: &FilterInfo) -> Option<&dyn Opt>;
@@ -120,20 +122,23 @@ pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut
 }
 
 #[derive(Debug)]
-pub struct DefaultSet {
+pub struct DefaultSet<T: Proc> {
     opts: Vec<Box<dyn Opt>>,
 
     utils: HashMap<String, Box<dyn Utils>>,
 
     support_prefixs: Vec<String>,
+
+    _marker: PhantomData<T>,
 }
 
-impl DefaultSet {
+impl<T: Proc> DefaultSet<T> {
     pub fn new() -> Self {
         Self {
             opts: vec![],
             utils: HashMap::new(),
             support_prefixs: vec![],
+            _marker: PhantomData::default(),
         }
     }
 
@@ -154,8 +159,14 @@ impl DefaultSet {
     }
 }
 
-impl Subscriber for DefaultSet {
-    fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>) {
+impl<T: Proc> Default for DefaultSet<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: Proc> Subscriber<T> for DefaultSet<T> {
+    fn subscribe_from(&self, publisher: &mut dyn Publisher<T>) {
         for opt in &self.opts {
             publisher.reg_subscriber(
                 self.get_utils(opt.type_name())
@@ -166,7 +177,7 @@ impl Subscriber for DefaultSet {
     }
 }
 
-impl Set for DefaultSet {
+impl<T: Proc> Set<T> for DefaultSet<T> {
     fn add_utils(&mut self, utils: Box<dyn Utils>) -> Result<bool> {
         if ! self.utils.contains_key(utils.type_name()) {
             self.utils.insert(utils.type_name().to_owned(), utils);
@@ -204,7 +215,7 @@ impl Set for DefaultSet {
     }
 
     
-    fn add_opt(&mut self, opt: &str) -> Result<Commit> {
+    fn add_opt(&mut self, opt: &str) -> Result<Commit<T>> {
         let ci = CreateInfo::parse(opt, &self.support_prefixs)?;
         Ok(Commit::new(self, ci))
     }
@@ -265,12 +276,12 @@ impl Set for DefaultSet {
         self.opts.len()
     }
 
-    fn filter(&self, opt: &str) -> Result<Filter> {
+    fn filter(&self, opt: &str) -> Result<Filter<T>> {
         let fi = FilterInfo::parse(opt, &self.support_prefixs)?;
         Ok(Filter::new(self, fi))
     }
 
-    fn filter_mut(&mut self, opt: &str) -> Result<FilterMut> {
+    fn filter_mut(&mut self, opt: &str) -> Result<FilterMut<T>> {
         let fi = FilterInfo::parse(opt, &self.support_prefixs)?;
         Ok(FilterMut::new(self, fi))
     }
@@ -354,7 +365,7 @@ impl Set for DefaultSet {
     }
 }
 
-impl Index<Identifier> for DefaultSet {
+impl<T: Proc> Index<Identifier> for DefaultSet<T> {
     type Output = dyn Opt;
 
     fn index(&self, index: Identifier) -> &Self::Output {
@@ -362,21 +373,21 @@ impl Index<Identifier> for DefaultSet {
     }
 }
 
-impl IndexMut<Identifier> for DefaultSet {
+impl<T: Proc> IndexMut<Identifier> for DefaultSet<T> {
     fn index_mut(&mut self, index: Identifier) -> &mut Self::Output {
         self.opts[index.get() as usize].as_mut()
     }
 }
 
 #[derive(Debug)]
-pub struct Commit<'a> {
-    ref_set: &'a mut dyn Set,
+pub struct Commit<'a, T: Proc> {
+    ref_set: &'a mut dyn Set<T>,
 
     create_info: CreateInfo,
 }
 
-impl<'a> Commit<'a> {
-    pub fn new(set: &'a mut dyn Set, ci: CreateInfo) -> Self {
+impl<'a, T: Proc> Commit<'a, T> {
+    pub fn new(set: &'a mut dyn Set<T>, ci: CreateInfo) -> Self {
         Self {
             ref_set: set,
             create_info: ci,
@@ -429,14 +440,14 @@ impl<'a> Commit<'a> {
 }
 
 #[derive(Debug)]
-pub struct Filter<'a> {
-    ref_set: &'a dyn Set,
+pub struct Filter<'a, T: Proc> {
+    ref_set: &'a dyn Set<T>,
 
     filter_info: FilterInfo,
 }
 
-impl<'a> Filter<'a> {
-    pub fn new(set: &'a dyn Set, fi: FilterInfo) -> Self {
+impl<'a, T: Proc> Filter<'a, T> {
+    pub fn new(set: &'a dyn Set<T>, fi: FilterInfo) -> Self {
         Self {
             ref_set: set,
             filter_info: fi,
@@ -477,14 +488,14 @@ impl<'a> Filter<'a> {
 }
 
 #[derive(Debug)]
-pub struct FilterMut<'a> {
-    ref_set: &'a mut dyn Set,
+pub struct FilterMut<'a, T: Proc> {
+    ref_set: &'a mut dyn Set<T>,
 
     filter_info: FilterInfo,
 }
 
-impl<'a> FilterMut<'a> {
-    pub fn new(set: &'a mut dyn Set, fi: FilterInfo) -> Self {
+impl<'a, T: Proc> FilterMut<'a, T> {
+    pub fn new(set: &'a mut dyn Set<T>, fi: FilterInfo) -> Self {
         Self {
             ref_set: set,
             filter_info: fi,
@@ -531,10 +542,11 @@ mod tests {
     use crate::opt::*;
     use crate::nonopt::*;
     use crate::id::Identifier as IIdentifier;
+    use crate::proc::SequenceProc;
 
     #[test]
     fn make_sure_set_work() {
-        let mut set = DefaultSet::new();
+        let mut set = DefaultSet::<SequenceProc>::new();
 
         assert_eq!(set.add_utils(Box::new(str::StrUtils::new())).is_err(), false);
         assert_eq!(set.add_utils(Box::new(int::IntUtils::new())).is_err(), false);

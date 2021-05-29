@@ -29,13 +29,13 @@ pub trait Publisher<M: Message> {
     fn clean(&mut self);
 }
 
-pub trait Subscriber {
-    fn subscribe_from(&self, publisher: &mut dyn Publisher<Box<dyn Proc>>);
+pub trait Subscriber<T: Proc> {
+    fn subscribe_from(&self, publisher: &mut dyn Publisher<T>);
 }
 
 /// Proc hold and process the [`Context`] created by [`Parser`](crate::parser::Parser).
 #[async_trait(?Send)]
-pub trait Proc: Debug {
+pub trait Proc: Debug + From<Identifier> {
     fn id(&self) -> Identifier;
 
     /// Append the context to current Proc
@@ -59,9 +59,9 @@ pub trait Proc: Debug {
     fn is_matched(&self) -> bool;
 }
 
-impl Message for Box<dyn Proc> {
+impl<T: Proc> Message for T {
     fn id(&self) -> Identifier {
-        Proc::id(self.as_ref())
+        Proc::id(self)
     }
 }
 
@@ -86,6 +86,12 @@ impl SequenceProc {
     }
 }
 
+impl From<Identifier> for SequenceProc {
+    fn from(id: Identifier) -> Self {
+        SequenceProc::new(id)
+    }
+}
+
 #[async_trait(?Send)]
 impl Proc for SequenceProc {
     fn id(&self) -> Identifier {
@@ -103,7 +109,7 @@ impl Proc for SequenceProc {
     #[cfg(not(feature="async"))]
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
         if self.is_matched() {
-            debug!("Skip process {:?}, it matched", self.id());
+            debug!("Skip process {:?}, it matched", Proc::id(self));
             return Ok(true);
         }
         let mut matched = false;
@@ -124,7 +130,7 @@ impl Proc for SequenceProc {
     #[cfg(feature="async")]
     async fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
         if self.is_matched() {
-            debug!("Skip process {:?}, it matched", self.id());
+            debug!("Skip process {:?}, it matched", Proc::id(self));
             return Ok(true);
         }
         let mut matched = false;

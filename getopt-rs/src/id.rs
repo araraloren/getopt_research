@@ -42,7 +42,7 @@ impl Add<u64> for Identifier {
     }
 }
 
-pub trait IdGenerator: Debug {
+pub trait IdGenerator: Debug + Default {
     /// Get next [`Identifier`]
     fn next_id(&mut self) -> Identifier;
 

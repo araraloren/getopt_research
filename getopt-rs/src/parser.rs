@@ -1,6 +1,6 @@
 
 use crate::ctx::{Context, OptContext, NonOptContext, DelayContext};
-use crate::proc::{Info, Proc, Publisher, SequenceProc};
+use crate::proc::{Info, Proc, Publisher};
 use crate::opt::{Opt, Style, OptValue};
 use crate::callback::{OptCallback, CallbackType};
 use crate::id::{Identifier, IdGenerator};
@@ -19,12 +19,13 @@ use async_trait::async_trait;
 /// use getopt_rs::arg::*;
 /// use getopt_rs::set::*;
 /// use getopt_rs::parser::*;
+/// use getopt_rs::proc::*;
 /// use getopt_rs::error::Result;
 /// use getopt_rs::callback::*;
 ///  
 /// let id = DefaultIdGen::default();
-/// let mut set = DefaultSet::new();
-/// let mut parser = ForwardParser::new(Box::new(id));
+/// let mut set = DefaultSet::<SequenceProc>::new();
+/// let mut parser = ForwardParser::new(id);
 ///
 /// set.initialize_utils();
 /// set.initialize_prefixs();
@@ -47,7 +48,7 @@ use async_trait::async_trait;
 ///     commit.commit().unwrap();
 /// }
 ///
-/// fn directory(set: &dyn Set, noa: &Vec<String>) -> Result<bool> {
+/// fn directory(set: &DefaultSet<SequenceProc>, noa: &Vec<String>) -> Result<bool> {
 ///     assert_eq!(noa[0], String::from("download/sources"));
 ///     Ok(true)
 /// }
@@ -84,12 +85,13 @@ use async_trait::async_trait;
 ///     "picture/pngs",
 /// ].iter().map(|&v|String::from(v)));
 ///
-/// parser.publish_to(Box::new(set));
+/// parser.publish_to(set);
 /// parser.parse(&mut ai).unwrap();
 /// parser.reset();
 /// ```
 #[async_trait(?Send)]
-pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
+pub trait Parser<T, S, G>: Debug + Publisher<T>
+    where T: Proc, S: Set<T>, G: IdGenerator {
     /// Parse the given argument, return Err if the argument not matched.
     #[cfg(not(feature="async"))]
     fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>>;
@@ -99,16 +101,16 @@ pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
     async fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>>;
 
     /// Set the [`Set`] for current parser.
-    fn publish_to(&mut self, set: Box<dyn Set>);
+    fn publish_to(&mut self, set: S);
 
     /// Set identifier generator.
-    fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>);
+    fn set_id_generator(&mut self, id_generator: G);
 
     /// Set the callback of option.
-    fn set_callback(&mut self, id: Identifier, callback: OptCallback);
+    fn set_callback(&mut self, id: Identifier, callback: OptCallback<T, S>);
 
     /// Get the [`Set`] of parser.
-    fn set(&self) -> &Option<Box<dyn Set>>;
+    fn set(&self) -> &Option<S>;
 
     fn get_opt(&self, id: Identifier) -> Option<& dyn Opt>;
 
@@ -144,22 +146,24 @@ pub trait Parser: Debug + Publisher<Box<dyn Proc>> {
 /// In last, the parser will publish GenStyle::GS_Non_Main non-option,
 /// and call [`Parser::check_other`] do other thing check.
 #[derive(Debug)]
-pub struct ForwardParser {
-    msg_id_gen: Box<dyn IdGenerator>,
+pub struct ForwardParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    msg_id_gen: G,
 
     cached_infos: Vec<Box<dyn Info>>,
 
     noa: Vec<String>,
 
-    set: Option<Box<dyn Set>>,
+    set: Option<S>,
 
     argument_matched: bool,
 
-    callbacks: HashMap<Identifier, OptCallback>,
+    callbacks: HashMap<Identifier, OptCallback<T, S>>,
 }
 
-impl ForwardParser {
-    pub fn new(msg_id_gen: Box<dyn IdGenerator>) -> Self {
+impl<T, S, G> ForwardParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    pub fn new(msg_id_gen: G) -> Self {
         Self {
             msg_id_gen: msg_id_gen,
             cached_infos: vec![],
@@ -193,13 +197,13 @@ impl ForwardParser {
                     let index = opt.index().calc_index(length as i64);
 
                     if let Some(index) = index {
-                        let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1])?;
+                        let ret = callback.call_index(self.set.as_ref().unwrap(), &self.noa[index as usize - 1])?;
                         // can we fix this long call?
                         self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                     }
                 }
                 CallbackType::Main => {
-                    let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa)?;
+                    let ret = callback.call_main(self.set.as_ref().unwrap(), &self.noa)?;
                     // can we fix this long call?
                     self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                 }
@@ -224,13 +228,13 @@ impl ForwardParser {
                     let index = opt.index().calc_index(length as i64);
 
                     if let Some(index) = index {
-                        let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1]).await?;
+                        let ret = callback.call_index(self.set.as_ref().unwrap(), &self.noa[index as usize - 1]).await?;
                         // can we fix this long call?
                         self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                     }
                 }
                 CallbackType::Main => {
-                    let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa).await?;
+                    let ret = callback.call_main(self.set.as_ref().unwrap(), &self.noa).await?;
                     // can we fix this long call?
                     self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                 }
@@ -241,8 +245,16 @@ impl ForwardParser {
     }
 }
 
+impl<T, S, G> Default for ForwardParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    fn default() -> Self {
+        Self::new(G::default())
+    }
+}
+
 #[async_trait(?Send)]
-impl Parser for ForwardParser {
+impl<T, S, G> Parser<T, S, G> for ForwardParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
     #[cfg(not(feature="async"))]
     fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
         if self.set.is_none() {
@@ -271,7 +283,7 @@ impl Parser for ForwardParser {
                         let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
 
                         if multiple_ctx.len() > 0 {
-                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                            let mut cp = T::from(self.msg_id_gen.next_id());
 
                             for ctx in multiple_ctx {
                                 cp.app_ctx(ctx);
@@ -306,7 +318,7 @@ impl Parser for ForwardParser {
             let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
 
             if non_opt_cmd.len() > 0 {
-                let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                let mut cp = T::from(self.msg_id_gen.next_id());
 
                 for non_opt in non_opt_cmd {
                     cp.app_ctx(non_opt);
@@ -319,7 +331,7 @@ impl Parser for ForwardParser {
                 let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
 
                 if non_opt_pos.len() > 0  {
-                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                    let mut cp = T::from(self.msg_id_gen.next_id());
 
                     for non_opt in non_opt_pos {
                         cp.app_ctx(non_opt);
@@ -335,7 +347,7 @@ impl Parser for ForwardParser {
         let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
 
         if non_opt_main.len() > 0 {
-            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+            let mut cp = T::from(self.msg_id_gen.next_id());
 
             for main in non_opt_main {
                 cp.app_ctx(main);
@@ -376,7 +388,7 @@ impl Parser for ForwardParser {
                         let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
 
                         if multiple_ctx.len() > 0 {
-                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                            let mut cp = T::from(self.msg_id_gen.next_id());
 
                             for ctx in multiple_ctx {
                                 cp.app_ctx(ctx);
@@ -411,7 +423,7 @@ impl Parser for ForwardParser {
             let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
 
             if non_opt_cmd.len() > 0 {
-                let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                let mut cp = T::from(self.msg_id_gen.next_id());
 
                 for non_opt in non_opt_cmd {
                     cp.app_ctx(non_opt);
@@ -424,7 +436,7 @@ impl Parser for ForwardParser {
                 let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
 
                 if non_opt_pos.len() > 0  {
-                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                    let mut cp = T::from(self.msg_id_gen.next_id());
 
                     for non_opt in non_opt_pos {
                         cp.app_ctx(non_opt);
@@ -440,7 +452,7 @@ impl Parser for ForwardParser {
         let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
 
         if non_opt_main.len() > 0 {
-            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+            let mut cp = T::from(self.msg_id_gen.next_id());
 
             for main in non_opt_main {
                 cp.app_ctx(main);
@@ -453,19 +465,19 @@ impl Parser for ForwardParser {
         Ok(Some(true))
     }
 
-    fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>) {
+    fn set_id_generator(&mut self, id_generator: G) {
         self.msg_id_gen = id_generator;
     }
 
-    fn set_callback(&mut self, id: Identifier, callback: OptCallback) {
+    fn set_callback(&mut self, id: Identifier, callback: OptCallback<T, S>) {
         self.callbacks.insert(id, callback);
     }
 
-    fn publish_to(&mut self, set: Box<dyn Set>) {
+    fn publish_to(&mut self, set: S) {
         self.set = Some(set);
     }
 
-    fn set(&self) -> &Option<Box<dyn Set>> {
+    fn set(&self) -> &Option<S> {
         &self.set
     }
 
@@ -482,11 +494,11 @@ impl Parser for ForwardParser {
     }
 
     fn check_opt(&self) -> Result<bool> {
-        parser_default_opt_check(self.set.as_ref().unwrap().as_ref())
+        parser_default_opt_check(self.set.as_ref().unwrap())
     }
 
     fn check_nonopt(&self) -> Result<bool> {
-        parser_default_nonopt_check(self.set.as_ref().unwrap().as_ref())
+        parser_default_nonopt_check(self.set.as_ref().unwrap())
     }
 
     fn check_other(&self) -> Result<bool> {
@@ -501,9 +513,10 @@ impl Parser for ForwardParser {
 }
 
 #[async_trait(?Send)]
-impl Publisher<Box<dyn Proc>> for ForwardParser {
+impl<T, S, G> Publisher<T> for ForwardParser<T, S, G> 
+    where T: Proc, S: Set<T>, G: IdGenerator {
     #[cfg(not(feature="async"))]
-    fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+    fn publish(&mut self, msg: T) -> Result<bool> {
         let mut proc = msg;
 
         debug!("Receive msg<{:?}> => {:?}", &proc.id(), &proc);
@@ -536,7 +549,7 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
     }
 
     #[cfg(feature="async")]
-    async fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+    async fn publish(&mut self, msg: T) -> Result<bool> {
         let mut proc = msg;
 
         debug!("Receive msg<{:?}> => {:?}", &proc.id(), &proc);
@@ -593,24 +606,26 @@ impl Publisher<Box<dyn Proc>> for ForwardParser {
 /// In last, the parser will publish GenStyle::GS_Non_Main non-option,
 /// and call [`Parser::check_other`] do other thing check.
 #[derive(Debug)]
-pub struct DelayParser {
-    msg_id_gen: Box<dyn IdGenerator>,
+pub struct DelayParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    msg_id_gen: G,
 
     cached_infos: Vec<Box<dyn Info>>,
 
     noa: Vec<String>,
 
-    set: Option<Box<dyn Set>>,
+    set: Option<S>,
 
     argument_matched: bool,
 
-    callbacks: HashMap<Identifier, OptCallback>,
+    callbacks: HashMap<Identifier, OptCallback<T, S>>,
 
     value_mapper: HashMap<Identifier, Vec<OptValue>>,
 }
 
-impl DelayParser {
-    pub fn new(msg_id_gen: Box<dyn IdGenerator>) -> Self {
+impl<T, S, G> DelayParser<T, S, G> 
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    pub fn new(msg_id_gen: G) -> Self {
         Self {
             msg_id_gen: msg_id_gen,
             cached_infos: vec![],
@@ -649,13 +664,13 @@ impl DelayParser {
                     let index = opt.index().calc_index(length as i64);
 
                     if let Some(index) = index {
-                        let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1])?;
+                        let ret = callback.call_index(self.set.as_ref().unwrap(), &self.noa[index as usize - 1])?;
                         // can we fix this long call?
                         self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                     }
                 }
                 CallbackType::Main => {
-                    let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa)?;
+                    let ret = callback.call_main(self.set.as_ref().unwrap(), &self.noa)?;
                     // can we fix this long call?
                     self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                 }
@@ -680,13 +695,13 @@ impl DelayParser {
                     let index = opt.index().calc_index(length as i64);
 
                     if let Some(index) = index {
-                        let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1]).await?;
+                        let ret = callback.call_index(self.set.as_ref().unwrap(), &self.noa[index as usize - 1]).await?;
                         // can we fix this long call?
                         self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                     }
                 }
                 CallbackType::Main => {
-                    let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa).await?;
+                    let ret = callback.call_main(self.set.as_ref().unwrap(), &self.noa).await?;
                     // can we fix this long call?
                     self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                 }
@@ -697,8 +712,16 @@ impl DelayParser {
     }
 }
 
+impl<T, S, G> Default for DelayParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    fn default() -> Self {
+        Self::new(G::default())
+    }
+}
+
 #[async_trait(?Send)]
-impl Parser for DelayParser {
+impl<T, S, G> Parser<T, S, G> for DelayParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
     #[cfg(not(feature="async"))]
     fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
         if self.set.is_none() {
@@ -727,7 +750,7 @@ impl Parser for DelayParser {
                         let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
 
                         if multiple_ctx.len() > 0 {
-                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                            let mut cp = T::from(self.msg_id_gen.next_id());
 
                             for ctx in multiple_ctx {
                                 cp.app_ctx(ctx);
@@ -763,7 +786,7 @@ impl Parser for DelayParser {
             let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
 
             if non_opt_cmd.len() > 0 {
-                let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                let mut cp = T::from(self.msg_id_gen.next_id());
 
                 for non_opt in non_opt_cmd {
                     cp.app_ctx(non_opt);
@@ -776,7 +799,7 @@ impl Parser for DelayParser {
                 let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
 
                 if non_opt_pos.len() > 0  {
-                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                    let mut cp = T::from(self.msg_id_gen.next_id());
 
                     for non_opt in non_opt_pos {
                         cp.app_ctx(non_opt);
@@ -811,7 +834,7 @@ impl Parser for DelayParser {
         let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
 
         if non_opt_main.len() > 0 {
-            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+            let mut cp = T::from(self.msg_id_gen.next_id());
 
             for main in non_opt_main {
                 cp.app_ctx(main);
@@ -852,7 +875,7 @@ impl Parser for DelayParser {
                         let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
 
                         if multiple_ctx.len() > 0 {
-                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                            let mut cp = T::from(self.msg_id_gen.next_id());
 
                             for ctx in multiple_ctx {
                                 cp.app_ctx(ctx);
@@ -888,7 +911,7 @@ impl Parser for DelayParser {
             let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
 
             if non_opt_cmd.len() > 0 {
-                let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                let mut cp = T::from(self.msg_id_gen.next_id());
 
                 for non_opt in non_opt_cmd {
                     cp.app_ctx(non_opt);
@@ -901,7 +924,7 @@ impl Parser for DelayParser {
                 let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
 
                 if non_opt_pos.len() > 0  {
-                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                    let mut cp = T::from(self.msg_id_gen.next_id());
 
                     for non_opt in non_opt_pos {
                         cp.app_ctx(non_opt);
@@ -936,7 +959,7 @@ impl Parser for DelayParser {
         let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
 
         if non_opt_main.len() > 0 {
-            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+            let mut cp = T::from(self.msg_id_gen.next_id());
 
             for main in non_opt_main {
                 cp.app_ctx(main);
@@ -949,19 +972,19 @@ impl Parser for DelayParser {
         Ok(Some(true))
     }
 
-    fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>) {
+    fn set_id_generator(&mut self, id_generator: G) {
         self.msg_id_gen = id_generator;
     }
 
-    fn set_callback(&mut self, id: Identifier, callback: OptCallback) {
+    fn set_callback(&mut self, id: Identifier, callback: OptCallback<T, S>) {
         self.callbacks.insert(id, callback);
     }
 
-    fn publish_to(&mut self, set: Box<dyn Set>) {
+    fn publish_to(&mut self, set: S) {
         self.set = Some(set);
     }
 
-    fn set(&self) -> &Option<Box<dyn Set>> {
+    fn set(&self) -> &Option<S> {
         &self.set
     }
 
@@ -982,8 +1005,8 @@ impl Parser for DelayParser {
     }
 
     fn check_nonopt(&self) -> Result<bool> {
-        parser_default_opt_check(self.set.as_ref().unwrap().as_ref())?;
-        parser_default_nonopt_check(self.set.as_ref().unwrap().as_ref())
+        parser_default_opt_check(self.set.as_ref().unwrap())?;
+        parser_default_nonopt_check(self.set.as_ref().unwrap())
     }
 
     fn check_other(&self) -> Result<bool> {
@@ -998,9 +1021,10 @@ impl Parser for DelayParser {
 }
 
 #[async_trait(?Send)]
-impl Publisher<Box<dyn Proc>> for DelayParser {
+impl<T, S, G> Publisher<T> for DelayParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
     #[cfg(not(feature="async"))]
-    fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+    fn publish(&mut self, msg: T) -> Result<bool> {
         let mut proc = msg;
         let mut value_keeper: HashMap::<Identifier, Vec<OptValue>> = HashMap::new();
         let mut process_id: Vec<Identifier> = vec![];
@@ -1060,7 +1084,7 @@ impl Publisher<Box<dyn Proc>> for DelayParser {
     }
 
     #[cfg(feature="async")]
-    async fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+    async fn publish(&mut self, msg: T) -> Result<bool> {
         let mut proc = msg;
         let mut value_keeper: HashMap::<Identifier, Vec<OptValue>> = HashMap::new();
         let mut process_id: Vec<Identifier> = vec![];
@@ -1145,22 +1169,24 @@ impl Publisher<Box<dyn Proc>> for DelayParser {
 /// and call [`Parser::check_other`] do other thing check.
 /// The [`PreParser`] will not return Err if any option/non-option not matched.
 #[derive(Debug)]
-pub struct PreParser {
-    msg_id_gen: Box<dyn IdGenerator>,
+pub struct PreParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    msg_id_gen: G,
 
     cached_infos: Vec<Box<dyn Info>>,
 
     noa: Vec<String>,
 
-    set: Option<Box<dyn Set>>,
+    set: Option<S>,
 
     argument_matched: bool,
 
-    callbacks: HashMap<Identifier, OptCallback>,
+    callbacks: HashMap<Identifier, OptCallback<T, S>>,
 }
 
-impl PreParser {
-    pub fn new(msg_id_gen: Box<dyn IdGenerator>) -> Self {
+impl<T, S, G> PreParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    pub fn new(msg_id_gen: G) -> Self {
         Self {
             msg_id_gen: msg_id_gen,
             cached_infos: vec![],
@@ -1194,13 +1220,13 @@ impl PreParser {
                     let index = opt.index().calc_index(length as i64);
 
                     if let Some(index) = index {
-                        let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1])?;
+                        let ret = callback.call_index(self.set.as_ref().unwrap(), &self.noa[index as usize - 1])?;
                         // can we fix this long call?
                         self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                     }
                 }
                 CallbackType::Main => {
-                    let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa)?;
+                    let ret = callback.call_main(self.set.as_ref().unwrap(), &self.noa)?;
                     // can we fix this long call?
                     self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                 }
@@ -1225,13 +1251,13 @@ impl PreParser {
                     let index = opt.index().calc_index(length as i64);
 
                     if let Some(index) = index {
-                        let ret = callback.call_index(self.set.as_ref().unwrap().as_ref(), &self.noa[index as usize - 1]).await?;
+                        let ret = callback.call_index(self.set.as_ref().unwrap(), &self.noa[index as usize - 1]).await?;
                         // can we fix this long call?
                         self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                     }
                 }
                 CallbackType::Main => {
-                    let ret = callback.call_main(self.set.as_ref().unwrap().as_ref(), &self.noa).await?;
+                    let ret = callback.call_main(self.set.as_ref().unwrap(), &self.noa).await?;
                     // can we fix this long call?
                     self.set.as_mut().unwrap().get_opt_mut(id.clone()).unwrap().set_value(OptValue::from_bool(ret));
                 }
@@ -1242,8 +1268,16 @@ impl PreParser {
     }
 }
 
+impl<T, S, G> Default for PreParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
+    fn default() -> Self {
+        Self::new(G::default())
+    }
+}
+
 #[async_trait(?Send)]
-impl Parser for PreParser {
+impl<T, S, G> Parser<T, S, G> for PreParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
     #[cfg(not(feature="async"))]
     fn parse(&mut self, iter: &mut dyn IndexIterator) -> Result<Option<bool>> {
         if self.set.is_none() {
@@ -1272,7 +1306,7 @@ impl Parser for PreParser {
                         let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
 
                         if multiple_ctx.len() > 0 {
-                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                            let mut cp = T::from(self.msg_id_gen.next_id());
 
                             for ctx in multiple_ctx {
                                 cp.app_ctx(ctx);
@@ -1308,7 +1342,7 @@ impl Parser for PreParser {
             let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
 
             if non_opt_cmd.len() > 0 {
-                let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                let mut cp = T::from(self.msg_id_gen.next_id());
 
                 for non_opt in non_opt_cmd {
                     cp.app_ctx(non_opt);
@@ -1321,7 +1355,7 @@ impl Parser for PreParser {
                 let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
 
                 if non_opt_pos.len() > 0  {
-                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                    let mut cp = T::from(self.msg_id_gen.next_id());
 
                     for non_opt in non_opt_pos {
                         cp.app_ctx(non_opt);
@@ -1337,7 +1371,7 @@ impl Parser for PreParser {
         let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
 
         if non_opt_main.len() > 0 {
-            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+            let mut cp = T::from(self.msg_id_gen.next_id());
 
             for main in non_opt_main {
                 cp.app_ctx(main);
@@ -1378,7 +1412,7 @@ impl Parser for PreParser {
                         let multiple_ctx = opt_style.gen_opt(&arg, iter.next());
 
                         if multiple_ctx.len() > 0 {
-                            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                            let mut cp = T::from(self.msg_id_gen.next_id());
 
                             for ctx in multiple_ctx {
                                 cp.app_ctx(ctx);
@@ -1413,7 +1447,7 @@ impl Parser for PreParser {
             let non_opt_cmd = GenStyle::GS_Non_Cmd.gen_nonopt(&self.noa()[0], noa_total as i64, 1);
 
             if non_opt_cmd.len() > 0 {
-                let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                let mut cp = T::from(self.msg_id_gen.next_id());
 
                 for non_opt in non_opt_cmd {
                     cp.app_ctx(non_opt);
@@ -1426,7 +1460,7 @@ impl Parser for PreParser {
                 let non_opt_pos = GenStyle::GS_Non_Pos.gen_nonopt(&self.noa()[index - 1], noa_total as i64, index as i64);
 
                 if non_opt_pos.len() > 0  {
-                    let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+                    let mut cp = T::from(self.msg_id_gen.next_id());
 
                     for non_opt in non_opt_pos {
                         cp.app_ctx(non_opt);
@@ -1442,7 +1476,7 @@ impl Parser for PreParser {
         let non_opt_main = GenStyle::GS_Non_Main.gen_nonopt(&String::new(), 0, 0);
 
         if non_opt_main.len() > 0 {
-            let mut cp = Box::new(SequenceProc::new(self.msg_id_gen.next_id()));
+            let mut cp = T::from(self.msg_id_gen.next_id());
 
             for main in non_opt_main {
                 cp.app_ctx(main);
@@ -1455,19 +1489,19 @@ impl Parser for PreParser {
         Ok(Some(true))
     }
 
-    fn set_id_generator(&mut self, id_generator: Box<dyn IdGenerator>) {
+    fn set_id_generator(&mut self, id_generator: G) {
         self.msg_id_gen = id_generator;
     }
 
-    fn set_callback(&mut self, id: Identifier, callback: OptCallback) {
+    fn set_callback(&mut self, id: Identifier, callback: OptCallback<T, S>) {
         self.callbacks.insert(id, callback);
     }
 
-    fn publish_to(&mut self, set: Box<dyn Set>) {
+    fn publish_to(&mut self, set: S) {
         self.set = Some(set);
     }
 
-    fn set(&self) -> &Option<Box<dyn Set>> {
+    fn set(&self) -> &Option<S> {
         &self.set
     }
 
@@ -1484,11 +1518,11 @@ impl Parser for PreParser {
     }
 
     fn check_opt(&self) -> Result<bool> {
-        parser_default_opt_check(self.set.as_ref().unwrap().as_ref())
+        parser_default_opt_check(self.set.as_ref().unwrap())
     }
 
     fn check_nonopt(&self) -> Result<bool> {
-        parser_default_nonopt_check(self.set.as_ref().unwrap().as_ref())
+        parser_default_nonopt_check(self.set.as_ref().unwrap())
     }
 
     fn check_other(&self) -> Result<bool> {
@@ -1503,9 +1537,10 @@ impl Parser for PreParser {
 }
 
 #[async_trait(?Send)]
-impl Publisher<Box<dyn Proc>> for PreParser {
+impl<T, S, G> Publisher<T> for PreParser<T, S, G>
+    where T: Proc, S: Set<T>, G: IdGenerator {
     #[cfg(not(feature="async"))]
-    fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+    fn publish(&mut self, msg: T) -> Result<bool> {
         let mut proc = msg;
 
         debug!("Receive msg<{:?}> => {:?}", &proc.id(), &proc);
@@ -1538,7 +1573,7 @@ impl Publisher<Box<dyn Proc>> for PreParser {
     }
 
     #[cfg(feature="async")]
-    async fn publish(&mut self, msg: Box<dyn Proc>) -> Result<bool> {
+    async fn publish(&mut self, msg: T) -> Result<bool> {
         let mut proc = msg;
 
         debug!("Receive msg<{:?}> => {:?}", &proc.id(), &proc);
@@ -1756,7 +1791,7 @@ impl GenStyle {
 /// This function will call function [`check`](crate::opt::Type::check)
 /// of options which type is [`Style::Boolean`], [`Style::Argument`]
 /// or [`Style::Multiple`]
-pub fn parser_default_opt_check(set: &dyn Set) -> Result<bool> {
+pub fn parser_default_opt_check<T: Proc, S: Set<T>>(set: &S) -> Result<bool> {
         for opt in set.iter() {
             if opt.as_ref().is_style(Style::Boolean) 
             || opt.as_ref().is_style(Style::Argument) 
@@ -1768,7 +1803,7 @@ pub fn parser_default_opt_check(set: &dyn Set) -> Result<bool> {
 }
 
 
-pub fn parser_default_nonopt_check(set: &dyn Set) -> Result<bool> {
+pub fn parser_default_nonopt_check<T: Proc, S: Set<T>>(set: &S) -> Result<bool> {
     let len = i64::MAX;
     let mut index_map: HashMap<i64, Vec<Identifier>> = HashMap::new();
 
@@ -1849,6 +1884,7 @@ pub fn parser_default_nonopt_check(set: &dyn Set) -> Result<bool> {
 mod tests {
 
     use super::*;
+    use crate::proc::SequenceProc;
     use crate::{arg::ArgIterator, proc::Subscriber, set::*};
     use crate::id::DefaultIdGen;
     use crate::opt::*;
@@ -1859,7 +1895,7 @@ mod tests {
     fn make_sure_forwardparser_work() {
         let id = DefaultIdGen::default();
         let mut set = DefaultSet::new();
-        let mut parser = ForwardParser::new(Box::new(id));
+        let mut parser = ForwardParser::new(id);
 
         assert!(set.add_utils(Box::new(bool::BoolUtils::new())).unwrap_or(false));
         assert!(set.add_utils(Box::new(str::StrUtils::new())).unwrap_or(false));
@@ -1906,7 +1942,7 @@ mod tests {
             commit.commit().unwrap();
         }
 
-        fn directory(set: &dyn Set, noa: &Vec<String>) -> Result<bool> {
+        fn directory(set: &DefaultSet<SequenceProc>, noa: &Vec<String>) -> Result<bool> {
             assert!(set.filter("c").unwrap().find().unwrap()
                        .value().as_vec().unwrap()
                        .contains(&String::from("c")));
@@ -1994,7 +2030,7 @@ mod tests {
         ].iter().map(|&v|String::from(v)));
 
         set.subscribe_from(&mut parser);
-        parser.publish_to(Box::new(set));
+        parser.publish_to(set);
         parser.parse(&mut ai).unwrap();
         parser.reset();
 
@@ -2028,7 +2064,7 @@ mod tests {
 
         let id = DefaultIdGen::default();
         let mut set = DefaultSet::new();
-        let mut parser = DelayParser::new(Box::new(id));
+        let mut parser = DelayParser::new(id);
 
         assert!(set.add_utils(Box::new(bool::BoolUtils::new())).unwrap_or(false));
         assert!(set.add_utils(Box::new(str::StrUtils::new())).unwrap_or(false));
@@ -2075,7 +2111,7 @@ mod tests {
             commit.commit().unwrap();
         }
 
-        fn directory(set: &dyn Set, noa: &Vec<String>) -> Result<bool> {
+        fn directory(set: &DefaultSet<SequenceProc>, noa: &Vec<String>) -> Result<bool> {
             assert!(set.filter("c").unwrap().find().unwrap()
                        .value().as_vec().unwrap()
                        .contains(&String::from("c")));
@@ -2166,7 +2202,7 @@ mod tests {
         ].iter().map(|&v|String::from(v)));
 
         set.subscribe_from(&mut parser);
-        parser.publish_to(Box::new(set));
+        parser.publish_to(set);
         parser.parse(&mut ai).unwrap();
         parser.reset();
         assert!(parser.set().as_ref().unwrap().filter("c").unwrap().find().unwrap()
@@ -2193,7 +2229,7 @@ mod tests {
     fn make_sure_preparser_work() {
         let id = DefaultIdGen::default();
         let mut set = DefaultSet::new();
-        let mut parser =  PreParser::new(Box::new(id));
+        let mut parser =  PreParser::new(id);
 
         assert!(set.add_utils(Box::new(bool::BoolUtils::new())).unwrap_or(false));
         assert!(set.add_utils(Box::new(str::StrUtils::new())).unwrap_or(false));
@@ -2240,7 +2276,7 @@ mod tests {
             commit.commit().unwrap();
         }
 
-        fn directory(set: &dyn Set, noa: &Vec<String>) -> Result<bool> {
+        fn directory(set: &DefaultSet<SequenceProc>, noa: &Vec<String>) -> Result<bool> {
             assert!(set.filter("c").unwrap().find().unwrap()
                        .value().as_vec().unwrap()
                        .contains(&String::from("c")));
@@ -2329,7 +2365,7 @@ mod tests {
         ].iter().map(|&v|String::from(v)));
 
         set.subscribe_from(&mut parser);
-        parser.publish_to(Box::new(set));
+        parser.publish_to(set);
         let ret = parser.parse(&mut ai).unwrap();
 
         assert_eq!(parser.noa(), &vec![

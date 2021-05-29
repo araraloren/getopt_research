@@ -1,23 +1,7 @@
-#[macro_use]
+
 extern crate getopt_rs;
 
-use getopt_rs::arg::ArgIterator;
-use getopt_rs::arg::IndexIterator;
-use getopt_rs::callback::OptCallback;
-#[cfg(not(features = "async"))]
-use getopt_rs::callback::*;
-use getopt_rs::error::Result;
-use getopt_rs::getopt_impl;
-use getopt_rs::id::DefaultIdGen;
-use getopt_rs::id::Identifier;
-use getopt_rs::opt::Opt;
-use getopt_rs::parser::DelayParser;
-use getopt_rs::parser::ForwardParser;
-use getopt_rs::parser::Parser;
-use getopt_rs::proc::Subscriber;
-use getopt_rs::set::DefaultSet;
-use getopt_rs::set::Set;
-use getopt_rs_macro::getopt;
+use getopt_rs::prelude::*;
 use simplelog::*;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -32,13 +16,20 @@ async fn main() {
     ])
     .unwrap();
 
+    #[cfg(feature="async")]
+    example3().await;
+
+    #[cfg(not(feature="async"))]
     example3();
 }
 
+#[cfg(not(feature="async"))]
 fn example3() {
-    let mut cache: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+    use getopt_rs::callback::*;
+
+    let cache: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
     let mut set = DefaultSet::new();
-    let mut parser = DelayParser::new(Box::new(DefaultIdGen::new(Identifier::new(0))));
+    let mut parser = DelayParser::new(DefaultIdGen::new(Identifier::new(0)));
 
     set.initialize_prefixs();
     set.initialize_utils().unwrap();
@@ -161,132 +152,129 @@ fn example3() {
     getopt!(parser, set).unwrap();
 }
 
-// async fn example3() {
-//     let cache: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
-//     let mut set = DefaultSet::new();
-//     let mut parser = DelayParser::new(Box::new(DefaultIdGen::new(Identifier::new(0))));
+#[cfg(feature="async")]
+async fn example3() {
 
-//     set.initialize_prefixs();
-//     set.initialize_utils().unwrap();
+    use getopt_rs::callback::*;
 
-//     #[derive(Debug)]
-//     struct AsyncValueCallback(Arc<Mutex<Vec<String>>>);
+    let cache: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+    let mut set = DefaultSet::new();
+    let mut parser = DelayParser::new(DefaultIdGen::new(Identifier::new(0)));
 
-//     #[async_trait::async_trait(?Send)]
-//     impl ValueCallback for AsyncValueCallback {
-//         async fn call(&mut self, opt: &dyn Opt) -> Result<bool> {
-//             let mut writer = self.0.lock().unwrap();
-//             let ret = match opt.name() {
-//                 "d" => {
-//                     (*writer).iter()
-//                     .filter(|&v|{ std::path::Path::new(v.as_str()).is_dir()})
-//                     .map(|v| { v.clone() })
-//                     .collect()
-//                 }
-//                 "f" => {
-//                     (*writer).iter()
-//                     .filter(|&v|{ std::path::Path::new(v.as_str()).is_file()})
-//                     .map(|v| { v.clone() })
-//                     .collect()
-//                 }
-//                 "l" => {
-//                     (*writer).iter()
-//                     .filter(|&v|{ std::path::Path::new(v.as_str()).read_link().is_ok()})
-//                     .map(|v| { v.clone() })
-//                     .collect()
-//                 }
-//                 "s" => {
-//                     (*writer).iter()
-//                     .filter(|&v|{ std::fs::metadata(v).unwrap().len() > *opt.value().as_uint().unwrap() })
-//                     .map(|v| { v.clone() })
-//                     .collect()
-//                 }
-//                 _ => {
-//                     panic!("Unknow option name!")
-//                 }
-//             };
-//             *writer = ret;
-//             Ok(true)
-//         }
-//     }
+    set.initialize_prefixs();
+    set.initialize_utils().unwrap();
 
-//     if let Ok(mut commit) = set.add_opt("-d=bool") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
-//     }
-//     if let Ok(mut commit) = set.add_opt("-f=bool") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
-//     }
-//     if let Ok(mut commit) = set.add_opt("-l=bool") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
-//     }
-//     if let Ok(mut commit) = set.add_opt("-s=uint") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
-//     }
+    #[derive(Debug)]
+    struct AsyncValueCallback(Arc<Mutex<Vec<String>>>);
 
-//     #[derive(Debug)]
-//     struct AsyncIndexCallback(Arc<Mutex<Vec<String>>>);
+    #[async_trait::async_trait(?Send)]
+    impl ValueCallback for AsyncValueCallback {
+        async fn call(&mut self, opt: &dyn Opt) -> Result<bool> {
+            let mut writer = self.0.lock().unwrap();
+            let ret = match opt.name() {
+                "d" => {
+                    (*writer).iter()
+                    .filter(|&v|{ std::path::Path::new(v.as_str()).is_dir()})
+                    .map(|v| { v.clone() })
+                    .collect()
+                }
+                "f" => {
+                    (*writer).iter()
+                    .filter(|&v|{ std::path::Path::new(v.as_str()).is_file()})
+                    .map(|v| { v.clone() })
+                    .collect()
+                }
+                "l" => {
+                    (*writer).iter()
+                    .filter(|&v|{ std::path::Path::new(v.as_str()).read_link().is_ok()})
+                    .map(|v| { v.clone() })
+                    .collect()
+                }
+                "s" => {
+                    (*writer).iter()
+                    .filter(|&v|{ std::fs::metadata(v).unwrap().len() > *opt.value().as_uint().unwrap() })
+                    .map(|v| { v.clone() })
+                    .collect()
+                }
+                _ => {
+                    panic!("Unknow option name!")
+                }
+            };
+            *writer = ret;
+            Ok(true)
+        }
+    }
 
-//     #[async_trait::async_trait(?Send)]
-//     impl IndexCallback for AsyncIndexCallback {
-//         async fn call(&mut self, _: &dyn Set, v: &String) -> Result<bool> {
-//             let mut writer = self.0.lock().unwrap();
-//             for entry in std::fs::read_dir(v).unwrap() {
-//                 let entry = entry.unwrap();
+    if let Ok(mut commit) = set.add_opt("-d=bool") {
+        let id = commit.commit().unwrap();
+        parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
+    }
+    if let Ok(mut commit) = set.add_opt("-f=bool") {
+        let id = commit.commit().unwrap();
+        parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
+    }
+    if let Ok(mut commit) = set.add_opt("-l=bool") {
+        let id = commit.commit().unwrap();
+        parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
+    }
+    if let Ok(mut commit) = set.add_opt("-s=uint") {
+        let id = commit.commit().unwrap();
+        parser.set_callback(id, OptCallback::Value(Box::new(AsyncValueCallback(cache.clone()))));
+    }
 
-//                 (*writer).push(entry.path().to_str().unwrap().to_owned());
-//             }
-//             Ok(true)
-//         }
-//     }
-//     if let Ok(mut commit) = set.add_opt("directory=pos@1") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(id, OptCallback::Index(Box::new(AsyncIndexCallback(cache.clone()))));
-//     }
+    #[derive(Debug)]
+    struct AsyncIndexCallback(Arc<Mutex<Vec<String>>>);
 
-//     #[derive(Debug)]
-//     struct AsyncMainCallback(Arc<Mutex<Vec<String>>>);
+    #[async_trait::async_trait(?Send)]
+    impl<T: Proc, S: Set<T>> IndexCallback<T, S> for AsyncIndexCallback {
+        async fn call(&mut self, _: &S, v: &String) -> Result<bool> {
+            let mut writer = self.0.lock().unwrap();
+            for entry in std::fs::read_dir(v).unwrap() {
+                let entry = entry.unwrap();
 
-//     #[async_trait::async_trait(?Send)]
-//     impl MainCallback for AsyncMainCallback {
-//         async fn call(&mut self, _: &dyn Set, noa: &Vec<String>) -> Result<bool> {
-//             let mut regex: Option<regex::Regex> = None;
+                (*writer).push(entry.path().to_str().unwrap().to_owned());
+            }
+            Ok(true)
+        }
+    }
+    if let Ok(mut commit) = set.add_opt("directory=pos@1") {
+        let id = commit.commit().unwrap();
+        parser.set_callback(id, OptCallback::Index(Box::new(AsyncIndexCallback(cache.clone()))));
+    }
 
-//             if noa.len() == 2 {
-//                 regex = regex::Regex::new(noa[1].as_str()).ok();
-//             }
-//             for file in self.0.lock().unwrap().iter() {
-//                 match &regex {
-//                     Some(regex) => {
-//                         if regex.is_match(file) {
-//                             println!("{}", file);
-//                         }
-//                     }
-//                     None => {
-//                         println!("{}", file);
-//                     }
-//                 }
-//             }
-//             Ok(true)
-//         }
-//     }
-//     if let Ok(mut commit) = set.add_opt("main=main") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(id, OptCallback::Main(Box::new(AsyncMainCallback(cache.clone()))));
-//     }
+    #[derive(Debug)]
+    struct AsyncMainCallback(Arc<Mutex<Vec<String>>>);
 
-//     set.subscribe_from(&mut parser);
-//     parser.publish_to(Box::new(set));
+    #[async_trait::async_trait(?Send)]
+    impl<T: Proc, S: Set<T>> MainCallback<T, S> for AsyncMainCallback {
+        async fn call(&mut self, _: &S, noa: &Vec<String>) -> Result<bool> {
+            let mut regex: Option<regex::Regex> = None;
 
-//     let mut ai: ArgIterator = ArgIterator::new();
+            if noa.len() == 2 {
+                regex = regex::Regex::new(noa[1].as_str()).ok();
+            }
+            for file in self.0.lock().unwrap().iter() {
+                match &regex {
+                    Some(regex) => {
+                        if regex.is_match(file) {
+                            println!("{}", file);
+                        }
+                    }
+                    None => {
+                        println!("{}", file);
+                    }
+                }
+            }
+            Ok(true)
+        }
+    }
+    if let Ok(mut commit) = set.add_opt("main=main") {
+        let id = commit.commit().unwrap();
+        parser.set_callback(id, OptCallback::Main(Box::new(AsyncMainCallback(cache.clone()))));
+    }
 
-//     ai.set_args(&mut std::env::args().skip(1));
-
-//     parser.parse(&mut ai).await.unwrap();
-// }
+    getopt!(parser, set).await.unwrap();
+}
 
 // fn example2() {
 //     let count = Arc::new(Mutex::new(32));
