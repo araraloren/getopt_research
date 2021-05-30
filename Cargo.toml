@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 getopt-rs = { path = "getopt-rs", features = [ ] }
 getopt-rs-macro = { path = "getopt-rs-macro", features = [ ] }
+getopt-rs-help = {path = "getopt-rs-help"}
 simplelog = "0.10.0"
 regex = "*"
 async-std = {version = "1.9", features = [ "attributes", "std" ]}
