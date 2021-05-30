@@ -13,6 +13,9 @@ pub enum Error {
     #[error("invalid option value `{0}`: `{1}`")]
     InvaldOptionValue(String, String),
 
+    #[error("invalid option id: `{0}`")]
+    InvaldOptionId(String),
+
     #[error("no available argument left")]
     InvalidNextArgument,
 
@@ -40,8 +43,8 @@ pub enum Error {
     #[error("need non-option: `{0}`")]
     NonOptionForceRequired(String),
 
-    #[error("invalid callback type: `{0}`")]
-    InvalidCallbackType(String),
+    #[error("invalid callback type for id(`{0}`): `{1}`")]
+    InvalidCallbackType(String, String),
 
     #[error("catch io error: `{0}`")]
     CatchIOError(#[from] std::io::Error),

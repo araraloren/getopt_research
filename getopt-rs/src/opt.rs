@@ -77,42 +77,44 @@ pub enum OptValue {
 
 /// The index of non-option arguments.
 ///
-/// It is base on one, zero is means [`NonOptIndex::AnyWhere`].
+/// It is base on one.
 /// For example, given command line arguments like `["rem", "-c", 5, "--force", "lucy"]`.
 /// After parser process the option `-c` and `--force`, 
 /// the left argument is non-option arguments `rem@1` and `lucy@2`.
+/// The zero is a special position which means [`NonOptIndex::AnyWhere`],
+/// it will be called with all position.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NonOptIndex {
-    Forward(i64),
+    /// It means the forward position of noa.
+    Forward(u64),
 
-    Backward(i64),
+    /// It means the backward position of noa.
+    Backward(u64),
 
+    /// It means any position of noa.
     AnyWhere,
 
     Null
 }
 
 impl NonOptIndex {
-    /// Return [`Self::Forward`] if index bigger than zero.
-    /// Return [`Self::Backward`] if index little than zero.
-    /// Otherwise return [`Self::AnyWhere`].
-    pub fn new(index: i64) -> Self {
-        if index > 0 {
-            Self::Forward(index)
-        }
-        else if index < 0 {
-            Self::Backward(-index)
-        }
-        else {
-            Self::AnyWhere
-        }
+    pub fn forward(index: u64) -> Self {
+        Self::Forward(index)
+    }
+
+    pub fn backward(index: u64) -> Self {
+        Self::Backward(index)
+    }
+
+    pub fn anywhere() -> Self {
+        Self::AnyWhere
     }
 
     pub fn null() -> Self {
         Self::Null
     }
 
-    pub fn calc_index(&self, total: i64) -> Option<i64> {
+    pub fn calc_index(&self, total: u64, current: u64) -> Option<u64> {
         match self {
             NonOptIndex::Forward(offset) => {
                 if *offset <= total {
@@ -120,14 +122,12 @@ impl NonOptIndex {
                 }
             }
             NonOptIndex::Backward(offset) => {
-                let realindex = total - *offset + 1;
-                
-                if realindex > 0 {
-                    return Some(realindex);
+                if *offset <= total {
+                    return Some(total - *offset + 1);
                 }
             }
             NonOptIndex::AnyWhere => {
-                return Some(0);
+                return Some(current);
             }
             _ => { }
         }
@@ -281,6 +281,10 @@ pub trait Identifier {
 ///     fn set_need_invoke(&mut self, invoke: bool) {
 ///         self.1 = invoke;
 ///     }
+/// 
+///     fn accept_callback_type(&self, callback_type: CallbackType) -> bool {
+///         callback_type == CallbackType::Value || callback_type == CallbackType::Null
+///     }
 /// }
 /// 
 /// let mut opt = O(CallbackType::Value, false);
@@ -308,6 +312,9 @@ pub trait Callback {
 
     /// Set invoke flag
     fn set_need_invoke(&mut self, invoke: bool);
+
+    /// Is the option can invoke the callback type
+    fn accept_callback_type(&self, callback_type: CallbackType) -> bool;
 }
 
 /// The name and prefix interface of an option.
@@ -574,8 +581,8 @@ pub trait Value {
 ///         self.0 = index;
 ///     }
 ///
-///     fn match_index(&self, total: i64, current: i64) -> bool {
-///        if let Some(realindex) = self.index().calc_index(total) {
+///     fn match_index(&self, total: u64, current: u64) -> bool {
+///        if let Some(realindex) = self.index().calc_index(total, current) {
 ///            return realindex == 0 || realindex == current;
 ///        }
 ///        false
@@ -603,7 +610,7 @@ pub trait Index {
 
     fn set_index(&mut self, index: NonOptIndex);
 
-    fn match_index(&self, total: i64, current: i64) -> bool;
+    fn match_index(&self, total: u64, current: u64) -> bool;
 }
 
 /// The option trait type, you need implement follow traits:
@@ -1206,7 +1213,7 @@ macro_rules! opt_type_def {
 ///     callback: CallbackType,
 /// }
 /// 
-/// // `opt_callback_def!(StrOpt, callback, callback_para, CallbackType::Value, CallbackType::Null)` will expand to 
+/// // `opt_callback_def!(StrOpt, callback, callback_para, CallbackType::Value, CallbackType::Null, CallbackType::Value, CallbackType::Null)` will expand to 
 /// 
 /// impl Callback for StrOpt {
 ///     fn callback_type(&self) -> CallbackType {
@@ -1229,6 +1236,14 @@ macro_rules! opt_type_def {
 ///             self.callback = CallbackType::Null;
 ///         }
 ///     }
+/// 
+///     fn accept_callback_type(&self, callback_para: CallbackType) -> bool {
+///         match callback_para {
+///             CallbackType::Value => true,
+///             CallbackType::Null => true,
+///             _ => false,
+///         }
+///     }
 /// }
 /// ```
 #[macro_export]
@@ -1238,6 +1253,7 @@ macro_rules! opt_callback_def {
      $callback_para:ident,
      $callback_true_value:expr,
      $callback_false_value:expr,
+     $($callback_pattern:pat),+
     ) => (
         impl Callback for $opt {
             fn callback_type(&self) -> CallbackType {
@@ -1258,6 +1274,15 @@ macro_rules! opt_callback_def {
                 }
                 else {
                     self.$callback = $callback_false_value;
+                }
+            }
+
+            fn accept_callback_type(&self, $callback_para: CallbackType) -> bool {
+                match $callback_para {
+                    $(
+                        $callback_pattern => true,
+                    )+
+                    _ => false
                 }
             }
         }
@@ -1583,9 +1608,9 @@ macro_rules! opt_alias_def {
 ///         self.index = index_para
 ///     }
 ///
-///     fn match_index(&self, total: i64, current: i64) -> bool {
-///        if let Some(realindex) = self.index().calc_index(total) {
-///            return realindex == 0 || realindex == current;
+///     fn match_index(&self, total: u64, current: u64) -> bool {
+///        if let Some(realindex) = self.index().calc_index(total, current) {
+///            return realindex == current;
 ///        }
 ///        false
 ///     }
@@ -1602,7 +1627,7 @@ macro_rules! opt_index_def {
             fn set_index(&mut self, _: NonOptIndex) { }
 
             /// using for option
-            fn match_index(&self, _: i64, _: i64) -> bool {
+            fn match_index(&self, _: u64, _: u64) -> bool {
                 true
             }
         }
@@ -1621,9 +1646,9 @@ macro_rules! opt_index_def {
                 self.$index = $index_para
             }
 
-            fn match_index(&self, total: i64, current: i64) -> bool {
-                if let Some(realindex) = self.index().calc_index(total) {
-                    return realindex == 0 || realindex == current;
+            fn match_index(&self, total: u64, current: u64) -> bool {
+                if let Some(realindex) = self.index().calc_index(total, current) {
+                    return realindex == current;
                 }
                 false
             }
@@ -1701,6 +1726,8 @@ pub mod str {
         callback,
         CallbackType::Value,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Value
     );
 
     opt_identifier_def!(
@@ -1908,6 +1935,8 @@ pub mod bool {
         callback,
         CallbackType::Value,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Value
     );
 
     opt_identifier_def!(
@@ -2120,6 +2149,8 @@ pub mod array {
         callback,
         CallbackType::Value,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Value
     );
 
     opt_identifier_def!(
@@ -2336,6 +2367,8 @@ pub mod int {
         callback,
         CallbackType::Value,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Value
     );
 
     opt_identifier_def!(
@@ -2535,6 +2568,8 @@ pub mod uint {
         callback,
         CallbackType::Value,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Value
     );
 
     opt_identifier_def!(
@@ -2734,6 +2769,8 @@ pub mod flt {
         callback,
         CallbackType::Value,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Value
     );
 
     opt_identifier_def!(
@@ -2923,6 +2960,8 @@ pub mod example {
         callback,
         CallbackType::Value,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Value
     );
 
     opt_identifier_def!(

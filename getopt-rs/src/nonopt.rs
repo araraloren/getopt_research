@@ -82,6 +82,8 @@ pub mod pos {
         callback_type,
         CallbackType::Index,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Index
     );
 
     opt_identifier_def!(
@@ -267,7 +269,7 @@ pub mod cmd {
                 name,
                 optional: false,
                 value: OptValue::default(),
-                index: NonOptIndex::new(1), // Cmd is the first noa
+                index: NonOptIndex::forward(1), // Cmd is always the first noa
                 callback: CallbackType::default(),
                 default_value: OptValue::default(),
             }
@@ -288,6 +290,8 @@ pub mod cmd {
         callback,
         CallbackType::Main,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Main
     );
 
     opt_identifier_def!(
@@ -328,8 +332,8 @@ pub mod cmd {
             
         }
 
-        fn match_index(&self, total: i64, current: i64) -> bool {
-            if let Some(realindex) = self.index().calc_index(total) {
+        fn match_index(&self, total: u64, current: u64) -> bool {
+            if let Some(realindex) = self.index().calc_index(total, current) {
                 return realindex == current;
             }
             false
@@ -470,7 +474,7 @@ pub mod main {
                 name,
                 optional: true,
                 value: OptValue::default(),
-                index: NonOptIndex::new(0), // Main need match anywhere
+                index: NonOptIndex::null(), // Main will always be called
                 callback: CallbackType::default(),
                 default_value: OptValue::default(),
             }
@@ -492,6 +496,8 @@ pub mod main {
         callback,
         CallbackType::Main,
         CallbackType::Null,
+        CallbackType::Null,
+        CallbackType::Main
     );
 
     opt_identifier_def!(
@@ -552,7 +558,7 @@ pub mod main {
             
         }
 
-        fn match_index(&self, _: i64, _: i64) -> bool {
+        fn match_index(&self, _: u64, _: u64) -> bool {
             true
         }
     }
@@ -819,7 +825,7 @@ mod tests {
         assert_eq!(nonopt.rem_alias("-", "c"), false);
         assert_eq!(nonopt.alias(), None);
 
-        assert_eq!(nonopt.index(), &NonOptIndex::AnyWhere);
+        assert_eq!(nonopt.index(), &NonOptIndex::Null);
         assert_eq!(nonopt.match_index(6, 1), true);
         nonopt.set_index(NonOptIndex::Forward(3));
         assert_eq!(nonopt.match_index(6, 4), true);

@@ -106,12 +106,12 @@ pub fn getopt(input: TokenStream) -> TokenStream {
     let mut getopt_init = match getopt_args.iterator.as_ref() {
         Some(_) => {
             quote! {
-                let mut parsers: Vec<Box<dyn Parser<SequenceProc, DefaultSet<SequenceProc>, DefaultIdGen>>> = vec![];
+                let mut parsers: Vec<Box<dyn Parser<DefaultIdGen>>> = vec![];
             }
         }
         None => {
             quote! {
-                let mut parsers: Vec<Box<dyn Parser<SequenceProc, DefaultSet<SequenceProc>, DefaultIdGen>>> = vec![];
+                let mut parsers: Vec<Box<dyn Parser<DefaultIdGen>>> = vec![];
                 let mut ai = ArgIterator::new();
                 
                 ai.set_args(&mut std::env::args().skip(1));
@@ -124,7 +124,7 @@ pub fn getopt(input: TokenStream) -> TokenStream {
             .map(|(p, s)| {
                 quote! { 
                     #s.subscribe_from(&mut #p);
-                    #p.publish_to(#s);
+                    #p.publish_to(Box::new(#s));
                     parsers.push(Box::new(#p)); 
                 }
             }
@@ -176,12 +176,12 @@ pub fn getopt(input: TokenStream) -> TokenStream {
     let mut getopt_init = match getopt_args.iterator.as_ref() {
         Some(_) => {
             quote! {
-                let mut parsers: Vec<Box<dyn Parser<SequenceProc, DefaultSet<SequenceProc>, DefaultIdGen>>> = vec![];
+                let mut parsers: Vec<Box<dyn Parser<DefaultIdGen>>> = vec![];
             }
         }
         None => {
             quote! {
-                let mut parsers: Vec<Box<dyn Parser<SequenceProc, DefaultSet<SequenceProc>, DefaultIdGen>>> = vec![];
+                let mut parsers: Vec<Box<dyn Parser<DefaultIdGen>>> = vec![];
                 let mut ai = ArgIterator::new();
                 
                 ai.set_args(&mut std::env::args().skip(1));
@@ -194,7 +194,7 @@ pub fn getopt(input: TokenStream) -> TokenStream {
             .map(|(p, s)| {
                 quote! { 
                     #s.subscribe_from(&mut #p);
-                    #p.publish_to(#s);
+                    #p.publish_to(Box::new(#s));
                     parsers.push(Box::new(#p)); 
                 }
             }

@@ -64,8 +64,8 @@ pub mod prelude {
 use prelude::*;
 
 #[cfg(not(feature="async"))]
-pub fn getopt_impl<T, S, G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<T, S, G>>>) -> Result<Option<Box<dyn Parser<T, S, G>>>>
-    where T: Proc, S: Set<T>, G: IdGenerator {
+pub fn getopt_impl<G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<G>>>) -> Result<Option<Box<dyn Parser<G>>>>
+    where G: IdGenerator {
     for mut parser in parsers {
         let ret = parser.parse(iter)?;
 
@@ -82,8 +82,8 @@ pub fn getopt_impl<T, S, G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn P
 }
 
 #[cfg(feature="async")]
-pub async fn getopt_impl<T, S, G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<T, S, G>>>) -> Result<Option<Box<dyn Parser<T, S, G>>>>
-    where T: Proc, S: Set<T>, G: IdGenerator {
+pub async fn getopt_impl<G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<G>>>) -> Result<Option<Box<dyn Parser<G>>>>
+    where G: IdGenerator {
     for mut parser in parsers {
         let ret = parser.parse(iter).await?;
 
@@ -118,30 +118,30 @@ pub mod tools {
         ])
     }
 
-    pub fn delay_parse(id_generator: DefaultIdGen) -> DelayParser<SequenceProc, DefaultSet<SequenceProc>, DefaultIdGen> {
+    pub fn delay_parse(id_generator: DefaultIdGen) -> DelayParser<DefaultIdGen> {
         DelayParser::new(id_generator)
     }
 
-    pub fn pre_parse(id_generator: DefaultIdGen) -> PreParser<SequenceProc, DefaultSet<SequenceProc>, DefaultIdGen> {
+    pub fn pre_parse(id_generator: DefaultIdGen) -> PreParser<DefaultIdGen> {
         PreParser::new(id_generator)
     }
 
-    pub fn forward_parse(id_generator: DefaultIdGen) -> ForwardParser<SequenceProc, DefaultSet<SequenceProc>, DefaultIdGen> {
+    pub fn forward_parse(id_generator: DefaultIdGen) -> ForwardParser<DefaultIdGen> {
         ForwardParser::new(id_generator)
     }
 
     #[cfg(not(feature="async"))]
-    pub fn simple_value_callback<T: 'static + Proc, S: 'static + Set<T>, F>(t: F) -> OptCallback<T, S> where F: 'static + FnMut(&dyn Opt) -> Result<bool> {
+    pub fn simple_value_callback<F>(t: F) -> OptCallback where F: 'static + FnMut(&dyn Opt) -> Result<bool> {
         OptCallback::from_value(Box::new(crate::callback::SimpleValueCallback::new(t)))
     }
 
     #[cfg(not(feature="async"))]
-    pub fn simple_index_callback<T: 'static + Proc, S: 'static + Set<T>, F>(t: F) -> OptCallback<T, S> where F: 'static + FnMut( &S, &String ) -> Result<bool> {
+    pub fn simple_index_callback<F>(t: F) -> OptCallback where F: 'static + FnMut( &dyn Set, &String ) -> Result<bool> {
         OptCallback::from_index(Box::new(crate::callback::SimpleIndexCallback::new(t))) 
     }
 
     #[cfg(not(feature="async"))]
-    pub fn simple_main_callback<T: 'static + Proc, S: 'static + Set<T>, F>(t: F) -> OptCallback<T, S> where F: 'static + FnMut( &S, &Vec<String> ) -> Result<bool> {
+    pub fn simple_main_callback<F>(t: F) -> OptCallback where F: 'static + FnMut( &dyn Set, &Vec<String> ) -> Result<bool> {
         OptCallback::from_main(Box::new(crate::callback::SimpleMainCallback::new(t))) 
     }
 }

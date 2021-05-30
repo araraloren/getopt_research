@@ -11,7 +11,7 @@ async fn main() {
     CombinedLogger::init(vec![
         SimpleLogger::new(LevelFilter::Warn, Config::default()),
         SimpleLogger::new(LevelFilter::Error, Config::default()),
-        //SimpleLogger::new(LevelFilter::Debug, Config::default()),
+        SimpleLogger::new(LevelFilter::Debug, Config::default()),
         SimpleLogger::new(LevelFilter::Info, Config::default()),
     ])
     .unwrap();
