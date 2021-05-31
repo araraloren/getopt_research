@@ -85,13 +85,14 @@ pub enum OptValue {
 /// it will be called with all position.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NonOptIndex {
-    /// It means the forward position of noa.
     Forward(u64),
 
-    /// It means the backward position of noa.
     Backward(u64),
 
-    /// It means any position of noa.
+    List(Vec<u64>),
+
+    Except(Vec<u64>),
+
     AnyWhere,
 
     Null
@@ -104,6 +105,14 @@ impl NonOptIndex {
 
     pub fn backward(index: u64) -> Self {
         Self::Backward(index)
+    }
+
+    pub fn list(list: Vec<u64>) -> Self {
+        Self::List(list)
+    }
+
+    pub fn except(list: Vec<u64>) -> Self {
+        Self::Except(list)
     }
 
     pub fn anywhere() -> Self {
@@ -128,6 +137,20 @@ impl NonOptIndex {
             }
             NonOptIndex::AnyWhere => {
                 return Some(current);
+            }
+            NonOptIndex::List(list) => {
+                for offset in list {
+                    if *offset <= total && *offset == current {
+                        return Some(*offset);
+                    }
+                }
+            }
+            NonOptIndex::Except(list) => {
+                for offset in list {
+                    if *offset <= total && *offset != current {
+                        return Some(current);
+                    }
+                }
             }
             _ => { }
         }

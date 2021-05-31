@@ -1347,7 +1347,6 @@ impl<G> Parser<G> for PreParser<G>
             }
             if !matched {
                 if let Some(arg) = iter.current() {
-                    println!("---> will push ?{}", arg);
                     self.noa.push(arg.clone());
                 }
             }
@@ -1929,7 +1928,6 @@ pub fn parser_default_nonopt_check(set: &dyn Set) -> Result<bool> {
 mod tests {
 
     use super::*;
-    use crate::proc::SequenceProc;
     use crate::{arg::ArgIterator, proc::Subscriber, set::*};
     use crate::id::DefaultIdGen;
     use crate::opt::*;
@@ -2010,8 +2008,8 @@ mod tests {
                        .value().as_vec().unwrap()
                        .contains(&String::from("hxx")));
             assert!(set.filter("cfg").unwrap().find().unwrap()
-                       .value().as_str().unwrap()
-                       .eq("cpp"));
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("cpp")));
             assert!(set.filter("m").unwrap().find().unwrap()
                        .value().as_vec().unwrap()
                        .contains(&String::from("mk")));
@@ -2057,6 +2055,32 @@ mod tests {
                 ))));
         }
 
+        if let Ok(mut commit) = set.add_opt("except=pos") {
+            commit.set_index(NonOptIndex::except(vec![1]));
+            let id = commit.commit().unwrap();
+            parser.set_callback(id, 
+                OptCallback::from_index(Box::new(SimpleIndexCallback::new(
+                    |_, noa| {
+                        Ok([
+                            "picture/pngs", "picture/jpgs",
+                        ].contains(&noa.as_str()))
+                    }
+                ))));
+        }
+
+        if let Ok(mut commit) = set.add_opt("list=pos") {
+            commit.set_index(NonOptIndex::list(vec![1]));
+            let id = commit.commit().unwrap();
+            parser.set_callback(id, 
+                OptCallback::from_index(Box::new(SimpleIndexCallback::new(
+                    |_, noa| {
+                        Ok([
+                            "download/sources",
+                        ].contains(&noa.as_str()))
+                    }
+                ))));
+        }
+
         if let Ok(mut commit) = set.add_opt("other=main") {
             let id = commit.commit().unwrap();
             parser.set_callback(id, 
@@ -2065,7 +2089,7 @@ mod tests {
                         assert_eq!(noa[0], String::from("download/sources"));
                         assert_eq!(noa[1], String::from("picture/pngs"));
                         assert_eq!(noa[2], String::from("picture/jpgs"));
-                        directory(set, noa);
+                        directory(set, noa)?;
                         Ok(true)
                     }
                 )))
@@ -2235,6 +2259,32 @@ mod tests {
                 ))));
         }
 
+        if let Ok(mut commit) = set.add_opt("except=pos") {
+            commit.set_index(NonOptIndex::except(vec![1]));
+            let id = commit.commit().unwrap();
+            parser.set_callback(id, 
+                OptCallback::from_index(Box::new(SimpleIndexCallback::new(
+                    |_, noa| {
+                        Ok([
+                            "picture/pngs", "picture/jpgs",
+                        ].contains(&noa.as_str()))
+                    }
+                ))));
+        }
+
+        if let Ok(mut commit) = set.add_opt("list=pos") {
+            commit.set_index(NonOptIndex::list(vec![1]));
+            let id = commit.commit().unwrap();
+            parser.set_callback(id, 
+                OptCallback::from_index(Box::new(SimpleIndexCallback::new(
+                    |_, noa| {
+                        Ok([
+                            "download/sources",
+                        ].contains(&noa.as_str()))
+                    }
+                ))));
+        }
+
         if let Ok(mut commit) = set.add_opt("other=main") {
             let id = commit.commit().unwrap();
             parser.set_callback(id, 
@@ -2371,8 +2421,8 @@ mod tests {
                        .value().as_vec().unwrap()
                        .contains(&String::from("hxx")));
             assert!(set.filter("cfg").unwrap().find().unwrap()
-                       .value().as_str().unwrap()
-                       .eq("cpp"));
+                       .value().as_vec().unwrap()
+                       .contains(&String::from("cpp")));
             assert!(set.filter("m").unwrap().find().unwrap()
                        .value().as_vec().unwrap()
                        .contains(&String::from("mk")));
@@ -2402,6 +2452,32 @@ mod tests {
                 OptCallback::from_index(Box::new(SimpleIndexCallback::new(
                     |_, noa| {
                         Ok(noa.as_str() == "download/sources")
+                    }
+                ))));
+        }
+
+        if let Ok(mut commit) = set.add_opt("except=pos") {
+            commit.set_index(NonOptIndex::except(vec![1]));
+            let id = commit.commit().unwrap();
+            parser.set_callback(id, 
+                OptCallback::from_index(Box::new(SimpleIndexCallback::new(
+                    |_, noa| {
+                        Ok([
+                            "picture/pngs", "picture/jpgs", "others",
+                        ].contains(&noa.as_str()))
+                    }
+                ))));
+        }
+
+        if let Ok(mut commit) = set.add_opt("list=pos") {
+            commit.set_index(NonOptIndex::list(vec![1]));
+            let id = commit.commit().unwrap();
+            parser.set_callback(id, 
+                OptCallback::from_index(Box::new(SimpleIndexCallback::new(
+                    |_, noa| {
+                        Ok([
+                            "download/sources",
+                        ].contains(&noa.as_str()))
                     }
                 ))));
         }
@@ -2441,7 +2517,7 @@ mod tests {
 
         set.subscribe_from(&mut parser);
         parser.publish_to(Box::new(set));
-        let ret = parser.parse(&mut ai).unwrap();
+        let _ret = parser.parse(&mut ai).unwrap();
 
         assert_eq!(parser.noa(), &vec![
             String::from("-f"),
