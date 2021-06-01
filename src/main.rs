@@ -5,6 +5,7 @@ use getopt_rs::prelude::*;
 use simplelog::*;
 use std::sync::Arc;
 use std::sync::Mutex;
+use getopt_rs::tools;
 
 #[async_std::main]
 async fn main() {
@@ -29,7 +30,7 @@ fn example3() {
 
     let cache: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
     let mut set = DefaultSet::new();
-    let mut parser = DelayParser::new(DefaultIdGen::new(Identifier::new(0)));
+    let mut parser = tools::forward_parse(0);
 
     set.initialize_prefixs();
     set.initialize_utils().unwrap();
@@ -159,7 +160,7 @@ async fn example3() {
 
     let cache: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
     let mut set = DefaultSet::new();
-    let mut parser = DelayParser::new(DefaultIdGen::new(Identifier::new(0)));
+    let mut parser = tools::forward_parse(0);
 
     set.initialize_prefixs();
     set.initialize_utils().unwrap();
@@ -275,239 +276,3 @@ async fn example3() {
 
     getopt!(parser, set).await.unwrap();
 }
-
-// fn example2() {
-//     let count = Arc::new(Mutex::new(32));
-
-//     let ref_count = count.clone();
-
-//     let mut set = DefaultSet::new();
-//     let mut parser = DelayParser::new(Box::new(DefaultIdGen::new(Identifier::new(0))));
-
-//     set.initialize_utils().unwrap();
-//     set.initialize_prefixs();
-//     set.add_utils(Box::new(opt::example::PathUtils::new())).unwrap();
-
-//     if let Ok(mut commit) = set.add_opt("-q=str") {
-//         commit.add_alias("--", "query");
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(
-//             id,
-//             OptCallback::Value(Box::new(SimpleValueCallback::new(move |opt: &dyn opt::Opt| {
-//                 dbg!("got a opt: ", opt);
-//                 let mut writer = ref_count.lock().unwrap();
-//                 *writer = 42;
-//                 Ok(true)
-//             }))),
-//         );
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("-f=bool") {
-//         commit.add_alias("--", "force");
-//         commit.commit().unwrap();
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("-k=array") {
-//         commit.add_alias("--", "keyword");
-//         commit.commit().unwrap();
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("-id=int") {
-//         commit.add_alias("--", "identifier");
-//         commit.commit().unwrap();
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("-i=path") {
-//         commit.add_alias("--", "import");
-//         commit.set_deafult_value(getopt_rs::opt::OptValue::from_any(Box::new(
-//             std::path::PathBuf::from("E:\\rust"),
-//         )));
-//         commit.commit().unwrap();
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("operator=pos@-1") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(
-//             id,
-//             OptCallback::from_index(Box::new(SimpleIndexCallback::new(
-//                 |set: &dyn Set, arg: &String| {
-//                     println!("In pos Meeting {:?}", arg);
-//                     Ok(true)
-//                 },
-//             ))),
-//         )
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("mysql=cmd") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(
-//             id,
-//             OptCallback::from_main(Box::new(SimpleMainCallback::new(
-//                 |set: &dyn Set, args: &Vec<String>| {
-//                     println!("In cmd Meeting {:?}", args);
-//                     Ok(true)
-//                 },
-//             ))),
-//         )
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("main=main") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(
-//             id,
-//             OptCallback::from_main(Box::new(SimpleMainCallback::new(
-//                 |set: &dyn Set, args: &Vec<String>| {
-//                     println!("In main Meeting {:?} ", args);
-//                     Ok(true)
-//                 },
-//             ))),
-//         )
-//     }
-
-//     set.subscribe_from(&mut parser);
-//     parser.publish_to(Box::new(set));
-
-//     let mut ai = ArgIterator::new();
-
-//     ai.set_args(
-//         &mut [
-//             "mysql",
-//             "--query",
-//             "bar",
-//             "--force",
-//             "-id",
-//             "-123",
-//             "-i",
-//             "E:\\rust\\getopt",
-//             "-k",
-//             "we",
-//             "--keyword",
-//             "are",
-//             "submit",
-//         ]
-//         .iter()
-//         .map(|&s| String::from(s)),
-//     );
-
-//     let ret = parser.parse(&mut ai);
-
-//     dbg!(ret);
-// }
-
-// fn exmaple1() {
-//     let count = Arc::new(Mutex::new(32));
-
-//     let ref_count = count.clone();
-
-//     let mut set = DefaultSet::new();
-//     let mut parser = DelayParser::new(Box::new(DefaultIdGen::new(Identifier::new(0))));
-
-//     set.initialize_utils().unwrap();
-//     set.initialize_prefixs();
-//     set.add_utils(Box::new(opt::example::PathUtils::new())).unwrap();
-
-//     if let Ok(mut commit) = set.add_opt("-q=str") {
-//         commit.add_alias("--", "query");
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(
-//             id,
-//             OptCallback::Value(Box::new(SimpleValueCallback::new(move |opt: &dyn opt::Opt| {
-//                 dbg!("got a opt: ", opt);
-//                 let mut writer = ref_count.lock().unwrap();
-//                 *writer = 42;
-//                 Ok(true)
-//             }))),
-//         );
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("-f=bool") {
-//         commit.add_alias("--", "force");
-//         commit.commit().unwrap();
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("-k=array") {
-//         commit.add_alias("--", "keyword");
-//         commit.commit().unwrap();
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("-id=int") {
-//         commit.add_alias("--", "identifier");
-//         commit.commit().unwrap();
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("-i=path") {
-//         commit.add_alias("--", "import");
-//         commit.set_deafult_value(getopt_rs::opt::OptValue::from_any(Box::new(
-//             std::path::PathBuf::from("E:\\rust"),
-//         )));
-//         commit.commit().unwrap();
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("operator=pos@-1") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(
-//             id,
-//             OptCallback::from_index(Box::new(SimpleIndexCallback::new(
-//                 |set: &dyn Set, arg: &String| {
-//                     println!("In pos Meeting {:?}", arg);
-//                     Ok(true)
-//                 },
-//             ))),
-//         )
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("mysql=cmd") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(
-//             id,
-//             OptCallback::from_main(Box::new(SimpleMainCallback::new(
-//                 |set: &dyn Set, args: &Vec<String>| {
-//                     println!("In cmd Meeting {:?}", args);
-//                     Ok(true)
-//                 },
-//             ))),
-//         )
-//     }
-
-//     if let Ok(mut commit) = set.add_opt("main=main") {
-//         let id = commit.commit().unwrap();
-//         parser.set_callback(
-//             id,
-//             OptCallback::from_main(Box::new(SimpleMainCallback::new(
-//                 |set: &dyn Set, args: &Vec<String>| {
-//                     println!("In main Meeting {:?} ", args);
-//                     Ok(true)
-//                 },
-//             ))),
-//         )
-//     }
-
-//     set.subscribe_from(&mut parser);
-//     parser.publish_to(Box::new(set));
-
-//     let mut ai = ArgIterator::new();
-
-//     ai.set_args(
-//         &mut [
-//             "mysql",
-//             "--query",
-//             "bar",
-//             "--force",
-//             "-id",
-//             "-123",
-//             "-i",
-//             "E:\\rust\\getopt",
-//             "-k",
-//             "we",
-//             "--keyword",
-//             "are",
-//             "submit",
-//         ]
-//         .iter()
-//         .map(|&s| String::from(s)),
-//     );
-
-//     let ret = parser.parse(&mut ai);
-
-//     dbg!(ret);
-// }

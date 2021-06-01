@@ -37,9 +37,9 @@ pub mod prelude {
     /// `getopt(ai, parser, set)` will may expand to 
     /// ```ignore
     /// {
-    ///     let mut parsers: Vec<Box<dyn Parser>> = ::alloc::vec::Vec::new();
+    ///     let mut parsers: Vec<Box<dyn Parser<DefaultSet, DefaultIdGen>>> = ::alloc::vec::Vec::new();
     ///     set.subscribe_from(&mut parser);
-    ///     parser.publish_to(Box::new(set));
+    ///     parser.publish_to(set);
     ///     parsers.push(Box::new(parser));
     ///     getopt_impl(&mut ai, parsers)
     /// }
@@ -48,12 +48,12 @@ pub mod prelude {
     /// `getopt(ai, parser1, set1, parser2, set2)` will may expand to 
     /// ```ignore
     /// {
-    ///     let mut parsers: Vec<Box<dyn Parser>> = ::alloc::vec::Vec::new();
+    ///     let mut parsers: Vec<Box<dyn Parser<DefaultSet, DefaultIdGen>>> = ::alloc::vec::Vec::new();
     ///     set1.subscribe_from(&mut parser1);
-    ///     parser1.publish_to(Box::new(set1));
+    ///     parser1.publish_to(set1);
     ///     parsers.push(Box::new(parser1));
     ///     set2.subscribe_from(&mut parser2);
-    ///     parser2.publish_to(Box::new(set2));
+    ///     parser2.publish_to(set2);
     ///     parsers.push(Box::new(parser2));
     ///     getopt_impl(&mut ai, parsers)
     /// }
@@ -64,8 +64,8 @@ pub mod prelude {
 use prelude::*;
 
 #[cfg(not(feature="async"))]
-pub fn getopt_impl<G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<G>>>) -> Result<Option<Box<dyn Parser<G>>>>
-    where G: IdGenerator {
+pub fn getopt_impl<S, G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<S, G>>>) -> Result<Option<Box<dyn Parser<S, G>>>>
+    where S: Set, G: IdGenerator {
     for mut parser in parsers {
         let ret = parser.parse(iter)?;
 
@@ -82,8 +82,8 @@ pub fn getopt_impl<G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<
 }
 
 #[cfg(feature="async")]
-pub async fn getopt_impl<G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<G>>>) -> Result<Option<Box<dyn Parser<G>>>>
-    where G: IdGenerator {
+pub async fn getopt_impl<S, G>(iter: &mut dyn IndexIterator, parsers: Vec<Box<dyn Parser<S, G>>>) -> Result<Option<Box<dyn Parser<S, G>>>>
+    where S: Set, G: IdGenerator {
     for mut parser in parsers {
         let ret = parser.parse(iter).await?;
 
@@ -105,7 +105,7 @@ pub mod tools {
     use log::LevelFilter;
 
 
-    pub fn idgenerator(id: u64) -> DefaultIdGen  {
+    pub fn default_id_gen(id: u64) -> DefaultIdGen  {
         DefaultIdGen::new(crate::id::Identifier::new(id))
     }
 
@@ -118,16 +118,16 @@ pub mod tools {
         ])
     }
 
-    pub fn delay_parse(id_generator: DefaultIdGen) -> DelayParser<DefaultIdGen> {
-        DelayParser::new(id_generator)
+    pub fn delay_parse(id: u64) -> DelayParser<DefaultSet, DefaultIdGen> {
+        DelayParser::new(default_id_gen(id))
     }
 
-    pub fn pre_parse(id_generator: DefaultIdGen) -> PreParser<DefaultIdGen> {
-        PreParser::new(id_generator)
+    pub fn pre_parse(id: u64) -> PreParser<DefaultSet, DefaultIdGen> {
+        PreParser::new(default_id_gen(id))
     }
 
-    pub fn forward_parse(id_generator: DefaultIdGen) -> ForwardParser<DefaultIdGen> {
-        ForwardParser::new(id_generator)
+    pub fn forward_parse(id: u64) -> ForwardParser<DefaultSet, DefaultIdGen> {
+        ForwardParser::new(default_id_gen(id))
     }
 
     #[cfg(not(feature="async"))]
