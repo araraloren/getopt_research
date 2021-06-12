@@ -1,11 +1,12 @@
 
 use std::fmt::Debug;
+use std::borrow::Cow;
 
 use crate::opt::{Opt, Style};
 use crate::error::{Result, Error};
 use crate::id::Identifier;
 
-pub trait Context: Debug {
+pub trait Context<'a>: Debug {
     /// Get context identifier inside [`Proc`](crate::proc::Proc)
     fn id(&self) -> &Identifier;
 
@@ -28,7 +29,7 @@ pub trait Context: Debug {
     fn get_style(&self) -> Style;
 
     /// Return next argument
-    fn get_next_argument(&self) -> &Option<String>;
+    fn get_next_argument(&self) -> Option<&Cow<'a, str>>;
 }
 
 /// Context implementation for option. 
@@ -36,14 +37,14 @@ pub trait Context: Debug {
 /// It will check the option name, prefix, style and alias.
 /// It will set option value if matched.
 #[derive(Debug)]
-pub struct OptContext {
+pub struct OptContext<'a> {
     id: Identifier,
 
-    opt_prefix: String,
+    opt_prefix: Cow<'a, str>,
 
-    opt_name: String,
+    opt_name: Cow<'a, str>,
 
-    next_argument: Option<String>,
+    next_argument: Option<Cow<'a, str>>,
 
     style: Style,
 
@@ -52,11 +53,11 @@ pub struct OptContext {
     matched_index: Option<u64>,
 }
 
-impl OptContext {
+impl<'a> OptContext<'a> {
     pub fn new(
-        prefix: String,
-        name: String,
-        arg: Option<String>,
+        prefix: Cow<'a, str>,
+        name: Cow<'a, str>,
+        arg: Option<Cow<'a, str>>,
         style: Style,
         skip_next_arg: bool
     ) -> Self {
@@ -71,17 +72,17 @@ impl OptContext {
         }
     }
 
-    pub fn set_prefix(&mut self, prefix: String) -> &mut Self {
+    pub fn set_prefix(&mut self, prefix: Cow<'a, str>) -> &mut Self {
         self.opt_prefix = prefix;
         self
     }
 
-    pub fn set_name(&mut self, name: String) -> &mut Self {
+    pub fn set_name(&mut self, name: Cow<'a, str>) -> &mut Self {
         self.opt_name = name;
         self
     }
 
-    pub fn set_next_argument(&mut self, arg: Option<String>) -> &mut Self {
+    pub fn set_next_argument(&mut self, arg: Option<Cow<'a, str>>) -> &mut Self {
         self.next_argument = arg;
         self
     }
@@ -97,7 +98,7 @@ impl OptContext {
     }
 }
 
-impl Context for OptContext {
+impl<'a> Context<'a> for OptContext<'a> {
     fn id(&self) -> &Identifier {
         &self.id
     }
@@ -145,8 +146,8 @@ impl Context for OptContext {
         self.style.clone()
     }
 
-    fn get_next_argument(&self) -> &Option<String> {
-        &self.next_argument
+    fn get_next_argument(&self) -> Option<&Cow<'a, str>> {
+        self.next_argument.as_ref()
     }
 }
 
@@ -155,10 +156,10 @@ impl Context for OptContext {
 /// It will check the non-option name, index, style.
 /// It will set option value if matched, and will make the callback invokeable.
 #[derive(Debug)]
-pub struct NonOptContext {
+pub struct NonOptContext<'a> {
     id: Identifier,
 
-    opt_name: String,
+    opt_name: Cow<'a, str>,
 
     style: Style,
 
@@ -169,8 +170,8 @@ pub struct NonOptContext {
     matched_index: Option<u64>,
 }
 
-impl NonOptContext {
-    pub fn new(opt_name: String, style: Style, total: u64, current: u64) -> Self {
+impl<'a> NonOptContext<'a> {
+    pub fn new(opt_name: Cow<'a, str>, style: Style, total: u64, current: u64) -> Self {
         Self {
             id: Identifier::new(0),
             opt_name,
@@ -206,7 +207,7 @@ impl NonOptContext {
     }
 }
 
-impl Context for NonOptContext {
+impl<'a> Context<'a> for NonOptContext<'a> {
     fn id(&self) -> &Identifier {
         &self.id
     }
@@ -248,8 +249,8 @@ impl Context for NonOptContext {
         self.style.clone()
     }
 
-    fn get_next_argument(&self) -> &Option<String> {
-        &None
+    fn get_next_argument(&self) -> Option<&Cow<'a, str>> {
+        None
     }
 }
 
@@ -258,14 +259,14 @@ impl Context for NonOptContext {
 /// It will check the option name, prefix, style and alias.
 /// It will not set option value if matched.
 #[derive(Debug)]
-pub struct DelayContext {
+pub struct DelayContext<'a> {
     id: Identifier,
 
-    opt_prefix: String,
+    opt_prefix: Cow<'a, str>,
 
-    opt_name: String,
+    opt_name: Cow<'a, str>,
 
-    next_argument: Option<String>,
+    next_argument: Option<Cow<'a, str>>,
 
     style: Style,
 
@@ -274,11 +275,11 @@ pub struct DelayContext {
     matched_index: Option<u64>,
 }
 
-impl DelayContext {
+impl<'a> DelayContext<'a> {
     pub fn new(
-        prefix: String,
-        name: String,
-        arg: Option<String>,
+        prefix: Cow<'a, str>,
+        name: Cow<'a, str>,
+        arg: Option<Cow<'a, str>>,
         style: Style,
         skip_next_arg: bool
     ) -> Self {
@@ -303,7 +304,7 @@ impl DelayContext {
         self
     }
 
-    pub fn set_next_argument(&mut self, arg: Option<String>) -> &mut Self {
+    pub fn set_next_argument(&mut self, arg: Option<Cow<'a, str>>) -> &mut Self {
         self.next_argument = arg;
         self
     }
@@ -319,7 +320,7 @@ impl DelayContext {
     }
 }
 
-impl Context for DelayContext {
+impl<'a> Context<'a> for DelayContext<'a> {
     fn id(&self) -> &Identifier {
         &self.id
     }
@@ -362,7 +363,7 @@ impl Context for DelayContext {
         self.style.clone()
     }
 
-    fn get_next_argument(&self) -> &Option<String> {
-        &self.next_argument
+    fn get_next_argument(&self) -> Option<&Cow<'a, str>> {
+        self.next_argument.as_ref()
     }
 }

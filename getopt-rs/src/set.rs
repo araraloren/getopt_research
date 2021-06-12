@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::slice::{Iter, IterMut};
 use std::ops::{Index, IndexMut};
@@ -40,7 +41,7 @@ use crate::id::Identifier;
 ///     commit.commit();
 /// }
 /// ```
-pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut<Identifier> {
+pub trait Set<'a, 'b, 'c, 'd>: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut<Identifier> {
     /// Add an [`Utils`] to the Set, return Err if the [`Utils`]'s name exist.
     fn add_utils(&mut self, utils: Box<dyn Utils>) -> Result<bool>;
 
@@ -48,7 +49,7 @@ pub trait Set: Debug + Subscriber + Index<Identifier, Output=dyn Opt> + IndexMut
     fn app_utils(&mut self, utils: Vec<Box<dyn Utils>>) -> Result<bool>;
 
     /// Remove the given [`Utils`] from the Set, return Err if the name not exist.
-    fn rem_utils(&mut self, type_name: &str) -> Result<bool>;
+    fn rem_utils(&mut self, type_name: impl AsRef<str>) -> Result<bool>;
 
     /// Get an [`Utils`] from the Set, return None if the name not exist.
     fn get_utils(&self, type_name: &str) -> Option<& dyn Utils>;

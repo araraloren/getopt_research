@@ -1,5 +1,6 @@
 
 use std::fmt::Debug;
+use std::borrow::Cow;
 use std::iter::Iterator;
 use async_trait::async_trait;
 
@@ -44,7 +45,7 @@ use crate::error::{Result, Error};
 /// assert!(ai.reach_end());
 /// ``` 
 #[async_trait]
-pub trait IndexIterator : Debug {
+pub trait IndexIterator<'a> : Debug {
     /// Set [`std::iter::Iterator`] of arguments.
     fn set_args(&mut self, args: &mut dyn Iterator<Item = String>);
 
@@ -55,7 +56,7 @@ pub trait IndexIterator : Debug {
     fn fill_current_and_next(&mut self);
 
     /// Get current argument
-    fn current(&self) -> &Option<String>;
+    fn current(&self) -> Option<&Cow<'a, str>>;
 
     /// Get current argument's index
     fn current_index(&self) -> usize;
@@ -64,7 +65,7 @@ pub trait IndexIterator : Debug {
     fn count(&self) -> usize;
 
     /// Get next argument
-    fn next(&self) -> &Option<String>;
+    fn next(&self) -> Option<&Cow<'a, str>>;
 
     /// Increment the index to next argument 
     fn skip(&mut self);
@@ -81,16 +82,16 @@ pub trait IndexIterator : Debug {
 }
 
 #[derive(Debug, Clone)]
-pub struct Argument {
-    prefix: Option<String>,
+pub struct Argument<'a> {
+    prefix: Option<Cow<'a, str>>,
 
-    name: Option<String>,
+    name: Option<Cow<'a, str>>,
 
-    value: Option<String>,
+    value: Option<Cow<'a, str>>,
 }
 
-impl Argument {
-    pub fn new(prefix: Option<String>, name: Option<String>, value: Option<String>) -> Self {
+impl<'a> Argument<'a> {
+    pub fn new(prefix: Option<Cow<'a, str>>, name: Option<Cow<'a, str>>, value: Option<Cow<'a, str>>) -> Self {
         Self {
             prefix,
             name,
@@ -98,38 +99,35 @@ impl Argument {
         }
     }
 
-    pub fn get_name(&self) -> Option<&String> {
+    pub fn get_name(&self) -> Option<&Cow<'a, str>> {
         self.name.as_ref()
     }
 
-    pub fn get_prefix(&self) -> Option<&String> {
+    pub fn get_prefix(&self) -> Option<&Cow<'a, str>> {
         self.prefix.as_ref()
     }
 
-    pub fn get_value(&self) -> Option<&String> {
+    pub fn get_value(&self) -> Option<&Cow<'a, str>> {
         self.value.as_ref()
     }
 }
 
 #[derive(Debug, Default)]
-pub struct ArgIterator {
-    cache_prefixs: Vec<String>,
-
+pub struct ArgIterator<'a> {
     index: usize,
 
     total: usize,
 
     args: Vec<String>,
 
-    arg: Option<String>,
+    arg: Option<Cow<'a, str>>,
 
-    next_arg: Option<String>,
+    next_arg: Option<Cow<'a, str>>,
 }
 
-impl ArgIterator {
+impl<'a> ArgIterator<'a> {
     pub fn new() -> Self {
         Self {
-            cache_prefixs: vec![],
             index: 0,
             total: 0,
             args: vec![],
@@ -140,7 +138,6 @@ impl ArgIterator {
 
     pub fn from_args(args: &mut dyn std::iter::Iterator<Item = String>) -> Self {
         let mut ret = Self {
-            cache_prefixs: vec![],
             index: 0,
             total: 0,
             args: vec![],
@@ -153,7 +150,7 @@ impl ArgIterator {
 }
 
 #[async_trait]
-impl IndexIterator for ArgIterator {
+impl<'a> IndexIterator<'a> for ArgIterator<'a> {
     fn set_args(&mut self, args: &mut dyn std::iter::Iterator<Item = String>) {
         self.args = args.map(|s|s).collect();
         self.total = self.args.len();
@@ -173,8 +170,8 @@ impl IndexIterator for ArgIterator {
         };
     }
 
-    fn current(&self) -> &Option<String> {
-        &self.arg
+    fn current(&self) -> Option<&Cow<'a, str>> {
+        self.arg.as_ref()
     }
 
     fn current_index(&self) -> usize {
@@ -185,8 +182,8 @@ impl IndexIterator for ArgIterator {
         self.total
     }
 
-    fn next(&self) -> &Option<String> {
-        &self.next_arg
+    fn next(&self) -> Option<&Cow<'a, str>> {
+        self.next_arg.as_ref()
     }
 
     fn skip(&mut self) {
@@ -213,18 +210,19 @@ impl IndexIterator for ArgIterator {
 /// Parsing the string to [`Argument`].
 /// The given `prefixs` need be sorted by length in descending order.
 #[cfg(feature="async")]
-pub async fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
+pub async fn parse_argument<'a>(s: Option<&Cow<'a, str>>, prefixs: &Vec<String>) -> Result<Argument> {
     parse_argument_impl(s, prefixs)
 }
 
 /// Parsing the string to [`Argument`].
 /// The given `prefixs` need be sorted by length in descending order.
 #[cfg(not(feature="async"))]
-pub fn parse_argument(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
+pub fn parse_argument<'a>(s: Option<&Cow<'a, str>>, prefixs: &Vec<String>) -> Result<Argument<'a>> {
     parse_argument_impl(s, prefixs)
 }
 
-fn parse_argument_impl(s: &Option<String>, prefixs: &Vec<String>) -> Result<Argument> {
+// TODO: refactor it with state machine parser
+fn parse_argument_impl<'a>(s: Option<&Cow<'a, str>>, prefixs: &Vec<String>) -> Result<Argument<'a>> {
     match s {
         Some(s) => {
             const SPLIT: &'static str = "=";

@@ -1,6 +1,7 @@
 
 use std::fmt::Debug;
 use std::any::Any;
+use std::borrow::Cow;
 
 use crate::callback::CallbackType;
 use crate::id::Identifier as IIdentifier;
@@ -383,7 +384,7 @@ pub trait Callback {
 /// assert_eq!(opt.match_name("c"), true);
 /// assert_eq!(opt.match_prefix("-"), true);
 /// ```
-pub trait Name {
+pub trait Name<'a, 'b> {
     /// Get the name of current option,
     /// it will return "a" for "-a"
     fn name(&self) -> &str;
@@ -393,10 +394,10 @@ pub trait Name {
     fn prefix(&self) -> &str;
 
     /// Set the name for current option
-    fn set_name(&mut self, s: &str);
+    fn set_name(&mut self, s: impl Into<Cow<'a, str>> );
 
     /// Set the prefix for current option
-    fn set_prefix(&mut self, s: &str);
+    fn set_prefix(&mut self, s: impl Into<Cow<'b, str>>);
 
     /// Return true if name equal
     fn match_name(&self, s: &str) -> bool;

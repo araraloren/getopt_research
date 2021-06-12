@@ -1,5 +1,6 @@
 
 use std::fmt::Debug;
+use std::borrow::Cow;
 
 use crate::callback::CallbackType;
 use crate::opt::{Opt, OptValue, NonOptIndex};
@@ -18,31 +19,31 @@ pub trait Utils: Debug {
 }
 
 #[derive(Debug, Default)]
-pub struct CreateInfo {
+pub struct CreateInfo<'a, 'b, 'c, 'd> {
     deactivate: bool,
 
     optional: bool,
 
-    type_name: String,
+    type_name: Cow<'a, str>,
 
-    opt_name: String,
+    opt_name: Cow<'b, str>,
 
-    opt_prefix: String,
+    opt_prefix: Cow<'c, str>,
 
     opt_index: NonOptIndex,
 
-    opt_alias: Vec<(String, String)>,
+    opt_alias: Vec<(Cow<'d, str>, Cow<'d, str>)>,
 
     opt_value: OptValue,
 
     opt_callback_type: CallbackType,
 }
 
-impl CreateInfo {
+impl<'a, 'b, 'c, 'd> CreateInfo<'a, 'b, 'c, 'd> {
     pub fn new(
-        type_name: &str,
-        name: &str,
-        prefix: &str,
+        type_name: impl Into<Cow<'a, str>>,
+        name: impl Into<Cow<'b, str>>,
+        prefix: impl Into<Cow<'c, str>>,
         index: NonOptIndex,
         deactivate_style: bool,
         optional: bool,
@@ -50,9 +51,9 @@ impl CreateInfo {
         opt_callback_type: CallbackType,
     ) -> Self {
         Self {
-            type_name: type_name.to_owned(),
-            opt_name: name.to_owned(),
-            opt_prefix: prefix.to_owned(),
+            type_name: type_name.into(),
+            opt_name: name.into(),
+            opt_prefix: prefix.into(),
             opt_index: index,
             deactivate: deactivate_style,
             optional,
@@ -62,14 +63,14 @@ impl CreateInfo {
         }
     }
 
-    pub fn parse(s: &str, prefixs: &Vec<String>) -> Result<Self> {
+    pub fn parse(s: &str, prefixs: &'c Vec<String>) -> Result<Self> {
         let pr = parse_opt_string(s, prefixs)?;
         let type_name = pr.type_name.ok_or(Error::NullOptionType)?;
         let opt_name = pr.opt_name.ok_or(Error::NullOptionName)?;
         Ok(Self {
             type_name,
             opt_name,
-            opt_prefix: pr.opt_prefix.unwrap_or(String::default()),
+            opt_prefix: pr.opt_prefix.unwrap_or(Cow::Borrowed("")),
             opt_index: pr.opt_index,
             deactivate: pr.deactivate.unwrap_or(false),
             optional: pr.optional.unwrap_or(true),
@@ -103,17 +104,17 @@ impl CreateInfo {
     }
 
     /// Return the option type name
-    pub fn get_type_name(&self) -> &str {
+    pub fn get_type_name(&self) -> &Cow<'a, str> {
         &self.type_name
     }
 
     /// Return the option name
-    pub fn get_name(&self) -> &str {
+    pub fn get_name(&self) -> &Cow<'b, str> {
         &self.opt_name
     }
 
     /// Return the option prefix
-    pub fn get_prefix(&self) -> &str {
+    pub fn get_prefix(&self) -> &Cow<'c, str> {
         &self.opt_prefix
     }
 
@@ -123,7 +124,7 @@ impl CreateInfo {
     }
 
     /// Return the option alias
-    pub fn get_alias(&self) -> &Vec<(String, String)> {
+    pub fn get_alias(&self) -> &Vec<(Cow<'d, str>, Cow<'d, str>)> {
         &self.opt_alias
     }
 
@@ -143,16 +144,16 @@ impl CreateInfo {
         self.optional = optional;
     }
 
-    pub fn set_type_name(&mut self, opt_type: &str) {
-        self.type_name = opt_type.to_owned();
+    pub fn set_type_name(&mut self, opt_type: Cow<'a, str>) {
+        self.type_name = opt_type;
     }
 
-    pub fn set_name(&mut self, opt_name: &str) {
-        self.opt_name = opt_name.to_owned();
+    pub fn set_name(&mut self, opt_name: Cow<'b, str>) {
+        self.opt_name = opt_name;
     }
 
-    pub fn set_prefix(&mut self, prefix: &str) {
-        self.opt_prefix = prefix.to_owned();
+    pub fn set_prefix(&mut self, prefix: Cow<'c, str>) {
+        self.opt_prefix = prefix;
     }
 
     pub fn set_index(&mut self, index: NonOptIndex) {
@@ -167,11 +168,11 @@ impl CreateInfo {
         self.opt_callback_type = callback_type;
     }
 
-    pub fn add_alias(&mut self, prefix: &str, name: &str) {
-        self.opt_alias.push((prefix.to_owned(), name.to_owned()));
+    pub fn add_alias(&mut self, prefix: Cow<'d, str>, name: Cow<'d, str>) {
+        self.opt_alias.push((prefix, name));
     }
 
-    pub fn rem_alias(&mut self, prefix: &str, name: &str) {
+    pub fn rem_alias(&mut self, prefix: Cow<'d, str>, name: Cow<'d, str>) {
         for index in 0 .. self.opt_alias.len() {
             let alias = &self.opt_alias[index];
 
@@ -188,21 +189,21 @@ impl CreateInfo {
 }
 
 #[derive(Debug, Default)]
-pub struct FilterInfo {
+pub struct FilterInfo<'a, 'b, 'c> {
     deactivate: Option<bool>,
 
     optional: Option<bool>,
 
-    type_name: Option<String>,
+    type_name: Option<Cow<'a, str>>,
 
-    opt_name: Option<String>,
+    opt_name: Option<Cow<'b, str>>,
 
-    opt_prefix: Option<String>,
+    opt_prefix: Option<Cow<'c, str>>,
 
     opt_index: NonOptIndex,
 }
 
-impl FilterInfo {
+impl<'a, 'b, 'c> FilterInfo<'a, 'b, 'c> {
     pub fn new() -> Self {
         Self {
             deactivate: None,
@@ -214,7 +215,7 @@ impl FilterInfo {
         }
     }
 
-    pub fn parse(opt: &str, prefixs: &Vec<String>) -> Result<Self> {
+    pub fn parse(opt: &str, prefixs: &'c Vec<String>) -> Result<Self> {
         let pr = parse_opt_string(opt, prefixs)?;
         Ok(Self {
             deactivate: pr.deactivate,
@@ -268,17 +269,17 @@ impl FilterInfo {
 
     /// Return the option type name
     pub fn get_type_name(&self) -> &str {
-        self.type_name.as_ref().unwrap().as_str()
+        self.type_name.as_ref().unwrap().as_ref()
     }
 
     /// Return the option name
     pub fn get_name(&self) -> &str {
-        self.opt_name.as_ref().unwrap().as_str()
+        self.opt_name.as_ref().unwrap().as_ref()
     }
 
     /// Return the option prefix
     pub fn get_prefix(&self) -> &str {
-        self.opt_prefix.as_ref().unwrap().as_str()
+        self.opt_prefix.as_ref().unwrap().as_ref()
     }
 
     /// Return the option index
@@ -294,16 +295,16 @@ impl FilterInfo {
         self.optional = Some(optional);
     }
 
-    pub fn set_type_name(&mut self, opt_type: &str) {
-        self.type_name = Some(opt_type.to_owned());
+    pub fn set_type_name(&mut self, opt_type: Cow<'a, str>) {
+        self.type_name = Some(opt_type);
     }
 
-    pub fn set_name(&mut self, opt_name: &str) {
-        self.opt_name = Some(opt_name.to_owned());
+    pub fn set_name(&mut self, opt_name: Cow<'b, str>) {
+        self.opt_name = Some(opt_name);
     }
 
-    pub fn set_prefix(&mut self, prefix: &str) {
-        self.opt_prefix = Some(prefix.to_owned());
+    pub fn set_prefix(&mut self, prefix: Cow<'c, str>) {
+        self.opt_prefix = Some(prefix);
     }
 
     pub fn set_index(&mut self, index: NonOptIndex) {
@@ -366,12 +367,12 @@ impl FilterInfo {
 }
 
 #[derive(Debug)]
-struct ParseResult {
-    type_name: Option<String>,
+struct ParseResult<'a, 'b> {
+    type_name: Option<Cow<'a, str>>,
 
-    opt_name: Option<String>,
+    opt_name: Option<Cow<'a, str>>,
 
-    opt_prefix: Option<String>,
+    opt_prefix: Option<Cow<'b, str>>,
 
     deactivate: Option<bool>,
 
@@ -385,135 +386,428 @@ struct ParseResult {
 /// and option type is `a`.
 /// `!` means the option is optional or not.
 /// `/` means the option is deactivate style or not.
-fn parse_opt_string(s: &str, prefixs: &Vec<String>) -> Result<ParseResult> {
-    const SPLIT: &str = "=";
-    const DEACTIVATE: &str = "/";
-    const NO_OPTIONAL: &str = "!";
-    const INDEX: &str = "@";
+fn parse_opt_string<'a, 'b, 'c>(pattern: &'a str, prefix: &'b Vec<String>) -> Result<ParseResult<'c, 'b>> {
+    let mut pattern = opt_parser::ParserPattern::new(pattern, prefix);
+    let mut data_keeper = opt_parser::DataKeeper::default();
 
-    if s.is_empty(){
-        return Err(Error::InvalidOptionStr(s.to_owned()));
-    }
+    let res = opt_parser::State::new().parse(&mut pattern, &mut data_keeper)?;
 
-    let mut splited_index = 0;
-    let mut deactivate = None;
-    let mut optional = None;
-    let mut opt_index = NonOptIndex::Null;
-    let opt_name;
-    let mut type_name = None;
-    let right_info;
-    let left_info;
-    let mut opt_prefix  = None;
-    let mut prefix_index = 0;
-    let without_prefix;
-
-    for prefix in prefixs.iter() {
-        if s.starts_with(prefix) {
-            opt_prefix = Some(prefix.clone());
-            prefix_index = prefix.len();
-            break;
-        }
-    }
-
-    if prefix_index == s.len() {
-        return Err(Error::InvalidOptionStr(s.to_owned()));
-    }
-
-    // do we have a prefix matched
-    if opt_prefix.is_none() {
-        without_prefix = s;
-    }
-    else {
-        without_prefix = s.split_at(prefix_index).1;
-    }
-
-    let splited: Vec<_> = without_prefix.split(SPLIT).collect();
-
-    // for example, s is `-o=a!/@1`, prefix is `-`
-    if splited.len() == 2 {
-        // `o`
-        left_info = splited[0];
-        // `a!/@1`
-        right_info = splited[1];
-    }
-    else {
-        // without type, right_info is `-|o!/@1`
-        right_info = without_prefix;
-        left_info = without_prefix;
-    }
-
-    // if we have a `/`
-    if let Some(index) = right_info.rfind(DEACTIVATE) {
-        deactivate = Some(true);
-        if index != 0 {
-            splited_index = index;
-        }
-    }
-    // if we have a `!`
-    if let Some(index) = right_info.rfind(NO_OPTIONAL) {
-        optional = Some(false);
-        if index != 0 && (index < splited_index || splited_index == 0) {
-            splited_index = index;
-        }
-    }
-    // if we have a `@`
-    if let Some(index) = right_info.rfind(INDEX) {
-        match right_info.split_at(index + 1).1.parse::<i64>() {
-            Ok(v) => {
-                if v > 0 {
-                    opt_index = NonOptIndex::forward(v as u64);
+    if res {
+        let pr = ParseResult {
+            type_name: data_keeper.type_name,
+            opt_name: data_keeper.name,
+            opt_prefix: data_keeper.prefix,
+            deactivate: Some(data_keeper.deactivate),
+            optional: Some(! data_keeper.optional),
+            opt_index: {
+                if data_keeper.forward_index.is_some() {
+                    NonOptIndex::forward(data_keeper.forward_index.unwrap())
                 }
-                else if v < 0 {
-                    opt_index = NonOptIndex::backward((-v) as  u64);
+                else if data_keeper.backward_index.is_some() {
+                    NonOptIndex::backward(data_keeper.backward_index.unwrap())
+                }
+                else if data_keeper.anywhere.unwrap_or(false) {
+                    NonOptIndex::anywhere()
+                }
+                else if data_keeper.list.len() > 0 {
+                    NonOptIndex::list(data_keeper.list.clone())
+                }
+                else if data_keeper.except.len() > 0 {
+                    NonOptIndex::except(data_keeper.except.clone())
                 }
                 else {
-                    opt_index = NonOptIndex::anywhere();
+                    NonOptIndex::default()
                 }
             }
-            Err(_) => {
-                return Err(Error::InvalidOptionStr(s.to_owned()))
-            }
-        }
-        if index != 0 && (index < splited_index || splited_index == 0) {
-            splited_index = index;
-        }
-    }
-
-    if splited.len() == 2 {
-        let inner_opt_type;
-
-        if splited_index == 0 {
-            // we not have `/`, `!` or `@`, so right_info is option type
-            inner_opt_type = right_info;
-        } else {
-            // left part is option type
-            inner_opt_type = right_info.split_at(splited_index).0;
         };
-        
-        type_name = Some(inner_opt_type.to_owned());
-        opt_name = Some(left_info.to_owned());
+        Ok(pr)
     }
     else {
-        if splited_index == 0 {
-            // we not have `/`, `!` or `@`, so right_info is option name part
-            opt_name = Some(right_info.to_owned());
+        Err(Error::InvalidOptionStr(format!("{:?}", pattern)))
+    }
+}
+
+pub mod opt_parser {
+    use std::borrow::Cow;
+    use std::str::Chars;
+    use std::iter::Skip;
+    use crate::error::Result;
+    use crate::error::Error;
+        
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub enum State {
+        PreCheck,
+        Prefix,
+        Name,
+        Equal,
+        Type,
+        Deactivate,
+        Optional,
+        Index,
+        FowradIndex,
+        BackwardIndex,
+        List,
+        Except,
+        End,
+    }
+
+    #[derive(Debug)]
+    pub struct ParserPattern<'a, 'b> {
+        pub pattern: &'a str,
+
+        pub support_prefix: &'b Vec<String>,
+
+        pub cur_index: usize,
+
+        pub end_index: usize,
+    }
+
+    impl<'a, 'b> ParserPattern<'a, 'b> {
+        pub fn new(pattern: &'a str, prefix: &'b Vec<String>) -> Self {
+            Self {
+                support_prefix: prefix,
+                end_index: pattern.len(),
+                cur_index: 0,
+                pattern,
+            }
         }
-        else {
-            // left part is option name part
-            opt_name  = Some(right_info.split_at(splited_index).0.to_owned());         
+
+        pub fn is_end(&self) -> bool {
+            self.cur_index == self.end_index
+        }
+
+        pub fn inc_index(&mut self, inc: usize) {
+            self.cur_index += inc;
+        }
+
+        pub fn set_index(&mut self, index: usize) {
+            self.cur_index = index;
+        }
+
+        pub fn chars(&self) -> Skip<Chars> {
+            self.pattern.chars().skip(self.cur_index)
         }
     }
 
-    debug!("Parsing ==> {:?} -> {:?} {:?} {:?}", s, opt_prefix, opt_name, type_name);
+    #[derive(Debug, Default)]
+    pub struct DataKeeper<'a, 'b> {
+        pub prefix: Option<Cow<'b, str>>,
 
-    return Ok(ParseResult {
-        type_name,
-        opt_name,
-        opt_prefix,
-        deactivate,
-        optional,
-        opt_index,
-    })
+        pub name: Option<Cow<'a, str>>,
+
+        pub type_name: Option<Cow<'a, str>>,
+
+        pub deactivate: bool,
+
+        pub optional: bool,
+
+        pub forward_index: Option<u64>,
+
+        pub backward_index: Option<u64>,
+
+        pub anywhere: Option<bool>,
+
+        pub list: Vec<u64>,
+
+        pub except: Vec<u64>,
+    }
+
+    impl<'a, 'b> ToString for DataKeeper<'a, 'b> {
+        fn to_string(&self) -> String {
+            let mut out = String::default();
+
+            if self.prefix.is_some() {
+                out += &format!("{}", self.prefix.as_ref().unwrap());
+            }
+            if self.name.is_some() {
+                out += &format!("{}", self.name.as_ref().unwrap());
+            }
+            if self.type_name.is_some() {
+                out += &format!("={}", self.type_name.as_ref().unwrap());
+            }
+            if self.deactivate {
+                out += "/";
+            }
+            if self.optional {
+                out += "!";
+            }
+            if self.forward_index.is_some() {
+                out += &format!("@{}", self.forward_index.unwrap());
+            } else if self.backward_index.is_some() {
+                out += &format!("@-{}", self.backward_index.unwrap());
+            } else if self.anywhere.is_some() {
+                out += "@0";
+            } else if self.list.len() > 0 {
+                out += "@[";
+                for (i, ch) in self.list.iter().enumerate() {
+                    out += &format!("{}", ch);
+                    if i < self.list.len() - 1 {
+                        out += ",";
+                    }
+                }
+                out += "]";
+            } else if self.except.len() > 0 {
+                out += "@-[";
+                for (i, ch) in self.except.iter().enumerate() {
+                    out += &format!("{}", ch);
+                    if i < self.except.len() - 1 {
+                        out += ",";
+                    }
+                }
+                out += "]";
+            }
+            out
+        }
+    }
+
+    impl<'a, 'b, 'c> State {
+        pub fn new() -> Self {
+            Self::PreCheck
+        }
+
+        pub fn transition(self, pattern: &mut ParserPattern<'a, 'b>) -> Self {
+            match self {
+                Self::PreCheck => {
+                    if pattern.pattern.is_empty() {
+                        Self::End
+                    } else {
+                        Self::Prefix
+                    }
+                }
+                State::Prefix => {
+                    if pattern.is_end() {
+                        Self::End
+                    } else {
+                        Self::Name
+                    }
+                }
+                State::Name => {
+                    if pattern.is_end() {
+                        Self::End
+                    } else {
+                        if let Some(ch) = pattern.chars().nth(0) {
+                            match ch {
+                                // equal state will increment the index
+                                '=' => Self::Equal,
+                                _ => Self::Type,
+                            }
+                        } else {
+                            Self::End
+                        }
+                    }
+                }
+                State::Equal => {
+                    if pattern.is_end() {
+                        Self::End
+                    } else {
+                        Self::Type
+                    }
+                }
+                State::Type | State::Deactivate | State::Optional => {
+                    if pattern.is_end() {
+                        Self::End
+                    } else {
+                        if let Some(ch) = pattern.chars().nth(0) {
+                            match ch {
+                                '!' => Self::Optional,
+                                '/' => Self::Deactivate,
+                                '@' => Self::Index,
+                                _ => Self::End,
+                            }
+                        } else {
+                            Self::End
+                        }
+                    }
+                }
+                State::Index => {
+                    if pattern.is_end() {
+                        Self::End
+                    } else {
+                        let (_, index_part) = pattern.pattern.split_at(pattern.cur_index);
+
+                        if index_part.starts_with("+[") || index_part.starts_with("[") {
+                            State::List
+                        } else if index_part.starts_with("-[") {
+                            State::Except
+                        } else if index_part.starts_with("-") {
+                            State::BackwardIndex
+                        } else {
+                            State::FowradIndex
+                        }
+                    }
+                }
+                State::FowradIndex | State::BackwardIndex | State::List | State::Except => State::End,
+                State::End => {
+                    State::End
+                },
+            }
+        }
+
+        pub fn parse(
+            self,
+            pattern: &mut ParserPattern<'a, 'b>,
+            data_keeper: &mut DataKeeper<'c, 'b>,
+        ) -> Result<bool> {
+            if !pattern.is_end() && self != State::End {
+                let state = self.transition(pattern);
+
+                match state {
+                    State::Prefix => {
+                        for prefix in pattern.support_prefix {
+                            if pattern.pattern.starts_with(prefix) {
+                                data_keeper.prefix = Some(Cow::Borrowed(prefix.as_str()));
+                                pattern.inc_index(prefix.len());
+                                break;
+                            }
+                        }
+                    }
+                    State::Name => {
+                        let mut cur_index = pattern.cur_index;
+
+                        for ch in pattern.chars() {
+                            cur_index += 1;
+                            if ch == '=' || ch == '!' || ch == '/' || ch == '@' {
+                                if cur_index - pattern.cur_index > 1 {
+                                    data_keeper.name = Some(Cow::Owned(String::from(
+                                        pattern
+                                            .pattern
+                                            .get(pattern.cur_index..cur_index - 1)
+                                            .unwrap(),
+                                    )));
+                                    pattern.set_index(cur_index - 1);
+                                }
+                                break;
+                            } else if cur_index == pattern.end_index {
+                                if cur_index - pattern.cur_index > 1 {
+                                    data_keeper.name = Some(Cow::Owned(String::from(
+                                        pattern.pattern.get(pattern.cur_index..cur_index).unwrap(),
+                                    )));
+                                    pattern.set_index(cur_index);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    State::Equal => {
+                        pattern.inc_index(1);
+                    }
+                    State::Type => {
+                        let mut cur_index = pattern.cur_index;
+
+                        for ch in pattern.chars() {
+                            cur_index += 1;
+                            if ch == '!' || ch == '/' || ch == '@' {
+                                if cur_index - pattern.cur_index > 1 {
+                                    data_keeper.type_name = Some(Cow::Owned(String::from(
+                                        pattern
+                                            .pattern
+                                            .get(pattern.cur_index..cur_index - 1)
+                                            .unwrap(),
+                                    )));
+                                    pattern.set_index(cur_index - 1);
+                                }
+                                break;
+                            } else if cur_index == pattern.end_index {
+                                if cur_index - pattern.cur_index > 1 {
+                                    data_keeper.type_name = Some(Cow::Owned(String::from(
+                                        pattern.pattern.get(pattern.cur_index..cur_index).unwrap(),
+                                    )));
+                                    pattern.set_index(cur_index);
+                                }
+                                break;
+                            }
+                        }
+                    }
+                    State::Deactivate => {
+                        data_keeper.deactivate = true;
+                        pattern.inc_index(1);
+                    }
+                    State::Optional => {
+                        data_keeper.optional = true;
+                        pattern.inc_index(1);
+                    }
+                    State::Index => {
+                        pattern.inc_index(1);
+                    }
+                    State::FowradIndex => {
+                        let (_, index_part) = pattern.pattern.split_at(pattern.cur_index);
+
+                        let index = index_part.parse::<u64>()
+                                                        .map_err(|e| Error::InavlidNonOptionIndex(format!("{:?}", e)))?;
+                        if index > 0 {
+                            data_keeper.forward_index = Some(index);
+                        }
+                        else {
+                            data_keeper.anywhere = Some(true);
+                        }
+                        pattern.set_index(pattern.end_index);
+                    }
+                    State::BackwardIndex => {
+                        let (_, index_part) = pattern.pattern.split_at(pattern.cur_index + 1);
+
+                        let index = index_part.parse::<u64>()
+                                                        .map_err(|e| Error::InavlidNonOptionIndex(format!("{:?}", e)))?;
+                        if index > 0 {
+                            data_keeper.backward_index = Some(index);
+                        }
+                        else {
+                            data_keeper.anywhere = Some(true);
+                        }
+                        pattern.set_index(pattern.end_index);
+                    }
+                    State::List => {
+                        let (_, index_part) = pattern.pattern.split_at(pattern.cur_index);
+
+                        if index_part.starts_with("+[") {
+                            let index_part = pattern
+                                .pattern
+                                .get(pattern.cur_index + 2..pattern.end_index - 1)
+                                .unwrap();
+
+                            data_keeper.list = index_part
+                                .split(',')
+                                .map(|v| v.parse::<u64>().map_err(|e| Error::InavlidNonOptionIndex(format!("{:?}", e))))
+                                .collect::<Result<Vec<u64>>>()?;
+                        } else {
+                            let index_part = pattern
+                                .pattern
+                                .get(pattern.cur_index + 1..pattern.end_index - 1)
+                                .unwrap();
+
+                            data_keeper.list = index_part
+                                .split(',')
+                                .map(|v| v.parse::<u64>().map_err(|e| Error::InavlidNonOptionIndex(format!("{:?}", e))))
+                                .collect::<Result<Vec<u64>>>()?;
+                        }
+                        pattern.set_index(pattern.end_index);
+                    }
+                    State::Except => {
+                        let index_part = pattern
+                            .pattern
+                            .get(pattern.cur_index + 2..pattern.end_index - 1)
+                            .unwrap();
+
+                        data_keeper.except = index_part
+                            .split(',')
+                            .map(|v| v.parse::<u64>().map_err(|e| Error::InavlidNonOptionIndex(format!("{:?}", e))))
+                            .collect::<Result<Vec<u64>>>()?;
+                        pattern.set_index(pattern.end_index);
+                    }
+                    State::End => {
+                        if !pattern.is_end() {
+                            return Err(Error::InvalidOptionStr(format!("{}", pattern.pattern)));
+                        }
+                    }
+                    _ => {}
+                }
+
+                state.parse(pattern, data_keeper)
+            }
+            else {
+                Ok(true)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
