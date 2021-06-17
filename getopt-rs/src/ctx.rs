@@ -1,10 +1,8 @@
 
 use std::fmt::Debug;
 
-use crate::opt::Opt;
-use crate::opt::Style;
-use crate::error::Result;
-use crate::error::Error;
+use crate::opt::{Opt, Style};
+use crate::error::{Result, Error};
 use crate::id::Identifier;
 
 pub trait Context: Debug {
@@ -17,11 +15,14 @@ pub trait Context: Debug {
     /// Process the option if matched successful
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool>;
 
-    /// Return true if the context already matched successful
-    fn is_matched(&self) -> bool;
+    /// Return matched index if the context already matched successful
+    fn get_matched_index(&self) -> Option<u64>;
 
     /// Return true if the matched option need an argument
     fn is_need_argument(&self) -> bool;
+
+    /// Return true if context matched any option
+    fn is_matched(&self) -> bool;
 
     /// Return the style of current context
     fn get_style(&self) -> Style;
@@ -48,7 +49,7 @@ pub struct OptContext {
 
     skip_next_arg: bool,
 
-    matched: bool,
+    matched_index: Option<u64>,
 }
 
 impl OptContext {
@@ -66,7 +67,7 @@ impl OptContext {
             next_argument: arg,
             style,
             skip_next_arg,
-            matched: false,
+            matched_index: None,
         }
     }
 
@@ -114,8 +115,8 @@ impl Context for OptContext {
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {
         let mut value = &String::default();
         
+        self.matched_index = Some(0);
         debug!("Match successed => {:?} : Opt<{:?}>", self, opt.id());
-        self.matched = true;
         if opt.is_style(Style::Argument) && self.next_argument.is_none() {
             return Err(Error::ArgumentRequired(format!("{}{}", opt.prefix(), opt.name())));
         }
@@ -128,12 +129,16 @@ impl Context for OptContext {
         Ok(true)
     }
 
-    fn is_matched(&self) -> bool {
-        self.matched
+    fn get_matched_index(&self) -> Option<u64> {
+        self.matched_index
     }
 
     fn is_need_argument(&self) -> bool {
         self.skip_next_arg
+    }
+
+    fn is_matched(&self) -> bool {
+        self.matched_index.is_some()
     }
 
     fn get_style(&self) -> Style {
@@ -157,22 +162,22 @@ pub struct NonOptContext {
 
     style: Style,
 
-    total: i64,
+    total: u64,
 
-    current: i64,
+    current: u64,
 
-    matched: bool,
+    matched_index: Option<u64>,
 }
 
 impl NonOptContext {
-    pub fn new(opt_name: String, style: Style, total: i64, current: i64) -> Self {
+    pub fn new(opt_name: String, style: Style, total: u64, current: u64) -> Self {
         Self {
             id: Identifier::new(0),
             opt_name,
             style,
             total,
             current,
-            matched: false,
+            matched_index: None,
         }
     }
 
@@ -190,12 +195,12 @@ impl NonOptContext {
         self
     }
 
-    pub fn set_total(&mut self, total: i64) -> &mut Self {
+    pub fn set_total(&mut self, total: u64) -> &mut Self {
         self.total = total;
         self
     }
 
-    pub fn set_current(&mut self, current: i64) -> &mut Self {
+    pub fn set_current(&mut self, current: u64) -> &mut Self {
         self.current = current;
         self
     }
@@ -218,8 +223,8 @@ impl Context for NonOptContext {
     }
 
     fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> { 
+        self.matched_index = Some(self.current);
         debug!("Match successed => {:?} : Opt<{:?}>", self, opt.id());
-        self.matched = true;
         // opt_name will be ignored, 
         // try to set value even if the value will be set in another side
         opt.set_value(opt.parse_value(&self.opt_name)?);
@@ -227,12 +232,16 @@ impl Context for NonOptContext {
         Ok(true)
     }
 
-    fn is_matched(&self) -> bool {
-        self.matched
+    fn get_matched_index(&self) -> Option<u64> {
+        self.matched_index
     }
 
     fn is_need_argument(&self) -> bool {
         false
+    }
+
+    fn is_matched(&self) -> bool {
+        self.matched_index.is_some()
     }
 
     fn get_style(&self) -> Style {
@@ -262,7 +271,7 @@ pub struct DelayContext {
 
     skip_next_arg: bool,
 
-    matched: bool,
+    matched_index: Option<u64>,
 }
 
 impl DelayContext {
@@ -280,7 +289,7 @@ impl DelayContext {
             next_argument: arg,
             style,
             skip_next_arg,
-            matched: false,
+            matched_index: None,
         }
     }
 
@@ -325,9 +334,9 @@ impl Context for DelayContext {
         matched
     }
 
-    fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {   
+    fn process(&mut self, opt: &mut dyn Opt) -> Result<bool> {  
+        self.matched_index = Some(0); 
         debug!("Match successed => {:?} : Opt<{:?}>", self, opt.id());
-        self.matched = true;
         if opt.is_style(Style::Argument) && self.next_argument.is_none() {
             return Err(Error::ArgumentRequired(format!("{}{}", opt.prefix(), opt.name())));
         }
@@ -337,12 +346,16 @@ impl Context for DelayContext {
         Ok(true)
     }
 
-    fn is_matched(&self) -> bool {
-        self.matched
+    fn get_matched_index(&self) -> Option<u64> {
+        self.matched_index
     }
 
     fn is_need_argument(&self) -> bool {
         self.skip_next_arg
+    }
+
+    fn is_matched(&self) -> bool {
+        self.matched_index.is_some()
     }
 
     fn get_style(&self) -> Style {

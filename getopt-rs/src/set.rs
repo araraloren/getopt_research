@@ -1,8 +1,7 @@
 use std::fmt::Debug;
-use std::slice::Iter;
-use std::slice::IterMut;
-use std::ops::Index;
-use std::ops::IndexMut;
+use std::marker::PhantomData;
+use std::slice::{Iter, IterMut};
+use std::ops::{Index, IndexMut};
 use std::collections::HashMap;
 
 use crate::opt::int::IntUtils;
@@ -14,18 +13,11 @@ use crate::opt::bool::BoolUtils;
 use crate::nonopt::pos::PosUtils;
 use crate::nonopt::cmd::CmdUtils;
 use crate::nonopt::main::MainUtils;
-use crate::opt::Opt;
-use crate::opt::OptValue;
-use crate::opt::NonOptIndex;
-use crate::error::Error;
-use crate::error::Result;
-use crate::proc::Publisher;
-use crate::proc::Subscriber;
-use crate::proc::Proc;
+use crate::opt::{Opt, OptValue, NonOptIndex};
+use crate::error::{Error, Result};
+use crate::proc::{Proc, Publisher, Subscriber};
+use crate::utils::{Utils, CreateInfo, FilterInfo};
 use crate::id::Identifier;
-use crate::utils::Utils;
-use crate::utils::CreateInfo;
-use crate::utils::FilterInfo;
 
 /// Set is a option/non-option collections.
 /// ```no_run
@@ -160,6 +152,12 @@ impl DefaultSet {
 
     pub fn initialize_prefixs(&mut self) {
         self.set_prefix(vec![String::from("-"), String::from("/"), String::from("--")]);
+    }
+}
+
+impl Default for DefaultSet {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

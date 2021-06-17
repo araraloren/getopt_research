@@ -1,8 +1,8 @@
 
 use std::fmt::Debug;
 
-use crate::{callback::CallbackType, opt::Opt};
-use crate::opt::{HelpInfo, NonOptIndex, OptValue};
+use crate::callback::CallbackType;
+use crate::opt::{Opt, HelpInfo, NonOptIndex, OptValue};
 use crate::error::{Error, Result};
 use crate::proc::Info;
 use crate::id::Identifier;
@@ -477,7 +477,15 @@ fn parse_opt_string(s: &str, prefixs: &Vec<String>) -> Result<ParseResult> {
     if let Some(index) = right_info.rfind(INDEX) {
         match right_info.split_at(index + 1).1.parse::<i64>() {
             Ok(v) => {
-                opt_index = NonOptIndex::new(v);
+                if v > 0 {
+                    opt_index = NonOptIndex::forward(v as u64);
+                }
+                else if v < 0 {
+                    opt_index = NonOptIndex::backward((-v) as  u64);
+                }
+                else {
+                    opt_index = NonOptIndex::anywhere();
+                }
             }
             Err(_) => {
                 return Err(Error::InvalidOptionStr(s.to_owned()))
