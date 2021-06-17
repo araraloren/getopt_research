@@ -430,6 +430,14 @@ impl<'a> Commit<'a> {
         self.create_info.set_deafult_value(value);
     }
 
+    pub fn set_hint(&mut self, hint: &str) {
+        self.create_info.set_hint(hint);
+    }
+
+    pub fn set_help(&mut self, help: &str) {
+        self.create_info.set_help(help);
+    }
+
     pub fn commit(&mut self) -> Result<Identifier> {
         self.ref_set.add_opt_ci(&self.create_info)
     }

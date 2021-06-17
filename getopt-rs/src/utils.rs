@@ -2,7 +2,7 @@
 use std::fmt::Debug;
 
 use crate::callback::CallbackType;
-use crate::opt::{Opt, OptValue, NonOptIndex};
+use crate::opt::{Opt, HelpInfo, NonOptIndex, OptValue};
 use crate::error::{Error, Result};
 use crate::proc::Info;
 use crate::id::Identifier;
@@ -36,6 +36,8 @@ pub struct CreateInfo {
     opt_value: OptValue,
 
     opt_callback_type: CallbackType,
+
+    opt_help: HelpInfo,
 }
 
 impl CreateInfo {
@@ -48,6 +50,7 @@ impl CreateInfo {
         optional: bool,
         deafult_value: OptValue,
         opt_callback_type: CallbackType,
+        opt_help: HelpInfo,
     ) -> Self {
         Self {
             type_name: type_name.to_owned(),
@@ -59,6 +62,7 @@ impl CreateInfo {
             opt_alias: vec![],
             opt_value: deafult_value,
             opt_callback_type,
+            opt_help,
         }
     }
 
@@ -76,6 +80,7 @@ impl CreateInfo {
             opt_alias: vec![],
             opt_value: OptValue::default(),
             opt_callback_type: CallbackType::default(),
+            opt_help: HelpInfo::default(),
         })
     }
 
@@ -135,6 +140,10 @@ impl CreateInfo {
         &self.opt_callback_type
     }
 
+    pub fn get_help_info(&self) -> &HelpInfo {
+        &self.opt_help
+    }
+
     pub fn set_deactivate_style(&mut self, deactivate: bool) {
         self.deactivate = deactivate;
     }
@@ -165,6 +174,14 @@ impl CreateInfo {
 
     pub fn set_callback_type(&mut self, callback_type: CallbackType) {
         self.opt_callback_type = callback_type;
+    }
+
+    pub fn set_hint(&mut self, hint: &str) {
+        self.opt_help.hint = hint.to_owned()
+    }
+
+    pub fn set_help(&mut self, help: &str) {
+        self.opt_help.help = help.to_owned()
     }
 
     pub fn add_alias(&mut self, prefix: &str, name: &str) {

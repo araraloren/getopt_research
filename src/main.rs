@@ -36,6 +36,7 @@ fn example3() {
     set.initialize_utils().unwrap();
 
     if let Ok(mut commit) = set.add_opt("-d=bool") {
+        commit.set_help("filter the file are directory");
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
         parser.set_callback(
@@ -53,6 +54,7 @@ fn example3() {
         );
     }
     if let Ok(mut commit) = set.add_opt("-f=bool") {
+        commit.set_help("filter the file are normal file");
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
         parser.set_callback(
@@ -70,6 +72,7 @@ fn example3() {
         );
     }
     if let Ok(mut commit) = set.add_opt("-l=bool") {
+        commit.set_help("filter the file are symbol link");
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
         parser.set_callback(
@@ -87,6 +90,7 @@ fn example3() {
         );
     }
     if let Ok(mut commit) = set.add_opt("-s=uint") {
+        commit.set_help("filter the file are large than size");
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
         parser.set_callback(
@@ -107,6 +111,7 @@ fn example3() {
         );
     }
     if let Ok(mut commit) = set.add_opt("directory=pos@1") {
+        commit.set_help("search the given directory");
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
         parser.set_callback(
@@ -123,6 +128,7 @@ fn example3() {
         );
     }
     if let Ok(mut commit) = set.add_opt("main=main") {
+        commit.set_help("main function");
         let id = commit.commit().unwrap();
         let cache_ref = cache.clone();
         parser.set_callback(
